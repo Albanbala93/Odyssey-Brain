@@ -104,14 +104,15 @@ cascade` des migrations.
 - Migration `0001_init.sql` complétée d'une colonne `user_preferences.consent`
   pour stocker l'état de consentement courant.
 
-**Bloqué pour la vérification end-to-end réelle** : aucun projet Supabase
-n'a encore été fourni (`NEXT_PUBLIC_SUPABASE_URL`,
-`NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`). Le code est
-écrit, typé et unitairement testé, mais l'authentification réelle, la
-migration invité→compte et la suppression de compte n'ont pas pu être
-exercées contre une vraie base de données. Aucun de ces éléments n'affecte
-le fonctionnement du mode invité local, qui reste actif et testé end-to-end
-tant que ces variables sont absentes.
+**Statut : vérifié en conditions réelles (2026-07-20).** Un projet Supabase
+a été créé, les migrations `0001_init.sql` et `supabase/seed.sql` exécutées,
+et `apps/web/.env.local` renseigné avec les 3 identifiants. Vérifié
+manuellement contre la vraie base : connexion par lien magique reçue et
+fonctionnelle, redirection `/auth/callback` correcte, bascule invité →
+compte confirmée (ligne créée dans `profiles` avec les données migrées), UI
+`/settings` affichant l'e-mail du compte et l'option de déconnexion. Le mode
+invité local reste inchangé et testé end-to-end quand ces variables sont
+absentes.
 
 **Limitation technique notable** : `postgrest-js@2.110.7` échoue à inférer
 correctement les génériques de `.upsert()` contre un `Database` à ~13
