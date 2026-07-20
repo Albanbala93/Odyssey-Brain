@@ -34,7 +34,8 @@ AGENTS.md                Project rules for anyone (human or AI) contributing her
 
 ## Getting started
 
-Requires Node.js ≥ 20.9 and pnpm.
+Requires Node.js ≥ 20.12 (needed by the Vitest/rolldown toolchain — earlier
+20.x releases don't export `node:util.styleText`) and pnpm.
 
 ```bash
 pnpm install
