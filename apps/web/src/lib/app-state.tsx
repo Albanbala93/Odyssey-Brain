@@ -19,6 +19,7 @@ import {
   createGuestUserModel,
   type OnboardingAnswers,
 } from "@/domain/user-model";
+import { useAuth } from "@/lib/auth/auth-context";
 import { createId } from "@/lib/id";
 import { countWords } from "@/lib/text";
 import {
@@ -32,9 +33,10 @@ import {
   type ReactNode,
 } from "react";
 import { LocalStorageStateRepository } from "./local-storage-repository";
-import { STATE_SCHEMA_VERSION } from "./state-repository";
+import { STATE_SCHEMA_VERSION, type UserStateRepository } from "./state-repository";
+import { SupabaseStateRepository } from "./supabase/state-repository";
 
-const repository = new LocalStorageStateRepository();
+const localStorageRepository = new LocalStorageStateRepository();
 const coachProvider = new LocalCoachProvider();
 
 function createInitialState(): OdysseyState {
@@ -51,6 +53,7 @@ interface AppStateValue {
   recordTranslationToggle: (sessionId: string, visible: boolean) => void;
   updatePreferences: (partial: Partial<UserModel["preferences"]>) => void;
   resetProfile: () => void;
+  deleteAccount: () => Promise<void>;
   getSession: (sessionId: string) => Session | undefined;
   getMissionForSession: (sessionId: string) => Mission | undefined;
   recommendedMission: () => { mission: Mission; reason: string };
@@ -59,6 +62,7 @@ interface AppStateValue {
 const AppStateContext = createContext<AppStateValue | null>(null);
 
 export function AppStateProvider({ children }: { children: ReactNode }) {
+  const { user, isReady: authReady, supabaseConfigured, signOut } = useAuth();
   const [state, setState] = useState<OdysseyState>(() => createInitialState());
   const [isReady, setIsReady] = useState(false);
   const stateRef = useRef(state);
@@ -71,19 +75,54 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     stateRef.current = state;
   }, [state]);
 
+  const repository = useMemo<UserStateRepository>(() => {
+    if (supabaseConfigured && user) return new SupabaseStateRepository(user.id);
+    return localStorageRepository;
+  }, [supabaseConfigured, user]);
+
   useEffect(() => {
-    // One-time hydration from localStorage: this external store cannot be
-    // read during SSR/first render, so reading it on mount and committing
-    // the result is the correct (and only) place for this setState call.
-    const loaded = repository.load();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (loaded) setState(loaded);
-    setIsReady(true);
-  }, []);
+    // Wait until we know whether there's an active Supabase session before
+    // hydrating, so a returning authenticated user doesn't briefly flash
+    // stale guest data. This external store (localStorage or Supabase)
+    // cannot be read during SSR/first render, so reading it here and
+    // committing the result is the correct place for this setState call.
+    if (!authReady) return;
+    let cancelled = false;
+
+    async function hydrate() {
+      const loaded = await repository.load();
+      if (cancelled) return;
+
+      if (loaded) {
+        setState(loaded);
+      } else if (user) {
+        // Authenticated but no account data yet (first sign-in): migrate
+        // whatever guest/local progress exists into the new account
+        // (ODYSSEY_MASTER_PROMPT_CODEX.md §5.1 guest upgrade path).
+        const guestState = (await localStorageRepository.load()) ?? stateRef.current;
+        const migrated: OdysseyState = {
+          ...guestState,
+          user: {
+            ...guestState.user,
+            identity: { ...guestState.user.identity, isGuest: false },
+          },
+        };
+        await repository.save(migrated);
+        if (!cancelled) setState(migrated);
+      }
+
+      if (!cancelled) setIsReady(true);
+    }
+
+    hydrate();
+    return () => {
+      cancelled = true;
+    };
+  }, [repository, authReady, user]);
 
   useEffect(() => {
     if (isReady) repository.save(state);
-  }, [state, isReady]);
+  }, [state, isReady, repository]);
 
   const completeOnboarding = useCallback((answers: OnboardingAnswers) => {
     setState((prev) => ({ ...prev, user: applyOnboardingAnswers(prev.user, answers) }));
@@ -291,7 +330,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const resetProfile = useCallback(() => {
     repository.clear();
     setState(createInitialState());
-  }, []);
+  }, [repository]);
+
+  const deleteAccount = useCallback(async () => {
+    if (!user) return;
+    const response = await fetch("/api/account/delete", { method: "POST" });
+    if (!response.ok) {
+      throw new Error("Account deletion failed");
+    }
+    await signOut();
+    await localStorageRepository.clear();
+    setState(createInitialState());
+  }, [user, signOut]);
 
   const getSession = useCallback((sessionId: string) => {
     return stateRef.current.sessions.find((s) => s.id === sessionId);
@@ -313,6 +363,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       recordTranslationToggle,
       updatePreferences,
       resetProfile,
+      deleteAccount,
       getSession,
       getMissionForSession,
       recommendedMission,
@@ -327,6 +378,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       recordTranslationToggle,
       updatePreferences,
       resetProfile,
+      deleteAccount,
       getSession,
       getMissionForSession,
       recommendedMission,
