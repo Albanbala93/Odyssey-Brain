@@ -1,0 +1,14 @@
+node_modules
+.next
+.turbo
+dist
+coverage
+pnpm-lock.yaml
+playwright-report
+test-results
+
+# Source-of-truth documents supplied verbatim by the product owner — kept
+# byte-for-byte as provided, not reformatted.
+ODYSSEY_MASTER_PROMPT_CODEX.md
+docs/brain/
+docs/legacy/
