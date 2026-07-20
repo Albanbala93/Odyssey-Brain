@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { AppStateProvider } from "@/lib/app-state";
+import { AuthProvider } from "@/lib/auth/auth-context";
 import "./globals.css";
 
 const inter = Inter({
@@ -22,7 +23,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="fr" className={`${inter.variable} h-full antialiased`}>
       <body className="bg-background text-foreground flex min-h-full flex-col">
-        <AppStateProvider>{children}</AppStateProvider>
+        <AuthProvider>
+          <AppStateProvider>{children}</AppStateProvider>
+        </AuthProvider>
       </body>
     </html>
   );

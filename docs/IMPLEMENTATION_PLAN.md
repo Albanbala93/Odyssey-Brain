@@ -79,15 +79,48 @@ de session.**
 Critères de sortie : un nouvel utilisateur termine la boucle complète sans
 API externe. **Statut : voir rapport de fin de session.**
 
-### Phase 2 — Authentification et base de données (bloquée par secrets)
+### Phase 2 — Authentification et base de données
 
-Nécessite `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
-(non fournis). Travail réalisable sans ces secrets et livré dès maintenant :
-schéma de migrations complet + RLS, interface `AuthProvider` /
-`UserStateRepository` avec implémentation `LocalStorageProvider` (actif) et
-`SupabaseProvider` (squelette, activable dès que les variables d'env sont
-renseignées). Le reste (upgrade de compte invité, persistence
-multi-appareils) reprendra dès que les secrets seront fournis.
+Code livré et testé (typecheck/lint/build/unit/e2e tous verts) :
+
+- Clients Supabase browser/server (`src/lib/supabase/client.ts`,
+  `server.ts`), toujours `null`-safe quand les variables d'env sont
+  absentes — l'app entière continue de fonctionner en mode invité local
+  sans aucune configuration.
+- Authentification par lien magique (`/auth`, `/auth/callback`), contexte
+  `AuthProvider` (`src/lib/auth/auth-context.tsx`), déconnexion.
+- `SupabaseStateRepository` (`src/lib/supabase/state-repository.ts`)
+  implémentant `UserStateRepository` (devenue asynchrone) en lisant/écrivant
+  les tables normalisées des migrations (profils, préférences, objectifs,
+  contextes, capacités, sessions, tours de conversation, mémoires) plutôt
+  qu'un blob JSON. Mapping pur et testé unitairement dans
+  `state-mapper.ts` / `state-mapper.test.ts` (8 tests).
+- Bascule invité → compte automatique : à la première connexion, l'état
+  local en mémoire est migré vers le nouveau compte Supabase
+  (`app-state.tsx`, effet d'hydratation).
+- Suppression de compte (`/api/account/delete`) via le client service-role
+  côté serveur, cascade sur toutes les tables via les FK `on delete
+cascade` des migrations.
+- Migration `0001_init.sql` complétée d'une colonne `user_preferences.consent`
+  pour stocker l'état de consentement courant.
+
+**Bloqué pour la vérification end-to-end réelle** : aucun projet Supabase
+n'a encore été fourni (`NEXT_PUBLIC_SUPABASE_URL`,
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`). Le code est
+écrit, typé et unitairement testé, mais l'authentification réelle, la
+migration invité→compte et la suppression de compte n'ont pas pu être
+exercées contre une vraie base de données. Aucun de ces éléments n'affecte
+le fonctionnement du mode invité local, qui reste actif et testé end-to-end
+tant que ces variables sont absentes.
+
+**Limitation technique notable** : `postgrest-js@2.110.7` échoue à inférer
+correctement les génériques de `.upsert()` contre un `Database` à ~13
+tables (`.select()` infère correctement, `.upsert()` résout `never` quel
+que soit l'argument — reproduit en isolation, y compris avec `createClient`
+direct sans passer par notre code). Contournement documenté et isolé dans
+`state-repository.ts` (`asUpsertArg`/`asWrite`) : la sécurité de forme est
+préservée en amont par les fonctions `mapStateTo*Upsert` (testées), seul le
+re-contrôle au point d'appel `.upsert()` est court-circuité.
 
 ### Phase 3 — Conversation IA (bloquée par secret `OPENAI_API_KEY`)
 

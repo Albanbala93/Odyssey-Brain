@@ -72,7 +72,11 @@ create table user_preferences (
   auto_speak boolean not null default true,
   slow_speech boolean not null default false,
   preferred_session_minutes integer not null default 8,
-  notification_settings jsonb not null default '{}'::jsonb
+  notification_settings jsonb not null default '{}'::jsonb,
+  -- Current consent snapshot (ConsentState in src/domain/types.ts). The
+  -- append-only history a real audit trail would want lives in
+  -- consent_records below; this column is the fast-read "current state".
+  consent jsonb not null default '{}'::jsonb
 );
 
 create table goals (

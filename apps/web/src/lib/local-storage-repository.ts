@@ -9,7 +9,10 @@ const STORAGE_KEY = "odyssey_state_v1";
  * and writes are no-ops when `window` is unavailable.
  */
 export class LocalStorageStateRepository implements UserStateRepository {
-  load(): OdysseyState | null {
+  // localStorage is synchronous; these are wrapped in `async` purely to
+  // satisfy UserStateRepository so callers can treat every implementation
+  // identically.
+  async load(): Promise<OdysseyState | null> {
     if (typeof window === "undefined") return null;
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -22,7 +25,7 @@ export class LocalStorageStateRepository implements UserStateRepository {
     }
   }
 
-  save(state: OdysseyState): void {
+  async save(state: OdysseyState): Promise<void> {
     if (typeof window === "undefined") return;
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -32,7 +35,7 @@ export class LocalStorageStateRepository implements UserStateRepository {
     }
   }
 
-  clear(): void {
+  async clear(): Promise<void> {
     if (typeof window === "undefined") return;
     window.localStorage.removeItem(STORAGE_KEY);
   }
