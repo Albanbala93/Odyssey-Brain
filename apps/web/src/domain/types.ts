@@ -192,6 +192,8 @@ export interface ConversationTurn {
   transcriptionConfidence?: number;
   /** For coach turns: the comprehension-risk signal detected from recent learner replies, used by the translation policy. */
   comprehensionRisk?: number;
+  /** For coach turns: which provider produced this reply, so the UI can label offline/fallback responses (ODYSSEY_MASTER_PROMPT_CODEX.md §21). */
+  source?: "openai" | "local_fallback";
   createdAt: string;
 }
 
