@@ -6,7 +6,8 @@ import { CapabilityCard } from "@/components/CapabilityCard";
 import { IntentCard } from "@/components/IntentCard";
 import { MissionCard } from "@/components/MissionCard";
 import { CAPABILITIES, getCapabilityBySlug } from "@/domain/capabilities-catalog";
-import { MISSIONS, getMissionBySlug } from "@/domain/missions";
+import { recommendMission } from "@/domain/decision-engine";
+import { MISSIONS } from "@/domain/missions";
 import { useAppState } from "@/lib/app-state";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -62,7 +63,24 @@ export default function TodayPage() {
     (min, m) => (m.estimatedMinutes < min.estimatedMinutes ? m : min),
     MISSIONS[0],
   );
-  const smallTalk = getMissionBySlug("small-talk-before-a-meeting");
+
+  // "Aide-moi à progresser" must offer a *different* mission than the
+  // primary recommendation, otherwise the button feels dead — pick the
+  // best option once the top pick is excluded.
+  const otherMissions = MISSIONS.filter((m) => m.id !== recommendation.mission.id);
+  const progressMission =
+    otherMissions.length > 0
+      ? recommendMission(state.user, otherMissions).mission
+      : recommendation.mission;
+
+  // "Discussion libre" picks among informal/networking scenarios using the
+  // same decision engine, so it naturally varies instead of always
+  // returning the same hardcoded mission.
+  const networkingMissions = MISSIONS.filter((m) => m.contextType === "networking");
+  const freeChatMission =
+    networkingMissions.length > 0
+      ? recommendMission(state.user, networkingMissions).mission
+      : recommendation.mission;
 
   return (
     <AppShell>
@@ -96,7 +114,7 @@ export default function TodayPage() {
             />
             <IntentCard
               label="💬 Discussion libre"
-              onClick={() => handleStart("free", smallTalk?.id ?? recommendation.mission.id)}
+              onClick={() => handleStart("free", freeChatMission.id)}
             />
             <IntentCard
               label="⏱️ Session de 5 minutes"
@@ -104,13 +122,15 @@ export default function TodayPage() {
             />
             <IntentCard
               label="📈 Aide-moi à progresser"
-              onClick={() => handleStart("progress", recommendation.mission.id)}
+              onClick={() => handleStart("progress", progressMission.id)}
             />
             <IntentCard
               label="🎲 Surprends-moi"
-              onClick={() =>
-                handleStart("surprise", MISSIONS[Math.floor(Math.random() * MISSIONS.length)].id)
-              }
+              onClick={() => {
+                const pool = otherMissions.length > 0 ? otherMissions : MISSIONS;
+                const pick = pool[Math.floor(Math.random() * pool.length)];
+                handleStart("surprise", pick.id);
+              }}
             />
           </div>
         </div>
