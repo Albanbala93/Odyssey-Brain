@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Odyssey MVP v2</title>
+<style>
+:root{
+  --bg:#f4f6f8;--card:#fff;--text:#17191d;--muted:#707783;--accent:#365cff;
+  --soft:#eef2ff;--line:#e5e8ee;--ok:#19875a;--danger:#c0392b
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;display:flex;justify-content:center;padding:18px}
+.app{width:390px;min-height:844px;background:#fff;border-radius:30px;box-shadow:0 18px 50px rgba(20,24,40,.14);overflow:hidden;position:relative}
+.screen{display:none;min-height:844px;padding:26px 20px 98px}.screen.active{display:block}
+.logo{font-weight:900;letter-spacing:.08em}.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}
+h1{font-size:34px;line-height:1.08;margin:16px 0 10px}h2{font-size:24px;margin:0 0 8px}h3{font-size:18px;margin:0 0 8px}
+p{line-height:1.5}.muted{color:var(--muted)}.small{font-size:13px}.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.hero{display:flex;flex-direction:column;justify-content:center;min-height:620px}
+.primary,.secondary,.ghost{width:100%;border-radius:16px;padding:15px 18px;font-size:16px;font-weight:800;cursor:pointer}
+.primary{border:0;background:var(--accent);color:#fff}.secondary{border:1px solid var(--line);background:#fff;color:var(--text)}.ghost{border:0;background:transparent;color:var(--accent)}
+.card{border:1px solid var(--line);border-radius:20px;padding:18px;background:#fff;box-shadow:0 5px 18px rgba(20,24,40,.04)}
+.coach{background:var(--soft);border:1px solid #dce4ff;border-radius:22px;padding:18px}
+.en{font-size:18px;font-weight:760;line-height:1.4}.fr{font-size:14px;color:var(--muted);line-height:1.4;margin-top:6px}
+.stack{display:grid;gap:12px}.choice{border:1px solid var(--line);border-radius:15px;padding:15px;background:#fff;cursor:pointer}
+.input{width:100%;padding:14px;border:1px solid var(--line);border-radius:15px;font-size:16px}
+.chat{display:grid;gap:14px;margin-top:12px;max-height:520px;overflow:auto;padding-bottom:8px}
+.bubble{max-width:87%;padding:14px 15px;border-radius:18px;line-height:1.45}.ai{justify-self:start;background:var(--soft)}.user{justify-self:end;background:#17191d;color:#fff}
+.translation-toggle{margin-top:10px;color:var(--accent);font-size:13px;font-weight:800;cursor:pointer}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}
+.voice{width:88px;height:88px;border-radius:50%;border:0;background:var(--accent);color:#fff;font-size:32px;cursor:pointer;box-shadow:0 10px 24px rgba(54,92,255,.28)}
+.voice.listening{animation:pulse 1s infinite}
+@keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.06)}100%{transform:scale(1)}}
+.center{text-align:center}.status{min-height:20px;margin:10px 0;color:var(--muted);font-size:13px}
+.nav{position:absolute;bottom:0;left:0;right:0;background:rgba(255,255,255,.96);border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:14px 6px 20px}
+.nav button{border:0;background:transparent;color:var(--muted);font-weight:800;cursor:pointer;font-size:12px}
+.badge{display:inline-block;padding:7px 10px;border-radius:999px;background:#eaf7f1;color:var(--ok);font-weight:800;font-size:13px}
+.progress{height:8px;background:#eceef2;border-radius:8px;overflow:hidden}.progress span{display:block;height:100%;background:var(--accent)}
+.result{font-size:42px;font-weight:900;color:var(--ok);margin:10px 0}.row{display:flex;gap:10px;align-items:center}.hidden{display:none}
+.switch{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid var(--line)}
+select{padding:10px;border:1px solid var(--line);border-radius:12px;background:white}
+</style>
+</head>
+<body>
+<div class="app">
+
+<section id="welcome" class="screen active">
+  <div class="hero">
+    <div class="logo">ODYSSEY</div>
+    <h1>Let’s speak.</h1>
+    <p class="muted">Ton coach IA est prêt. Tu parleras anglais dès la première minute.</p>
+    <button class="primary" style="margin-top:24px" onclick="startApp()">Continuer</button>
+  </div>
+</section>
+
+<section id="onboarding" class="screen">
+  <div class="topbar"><span class="logo">ODYSSEY</span><span class="small muted">Onboarding</span></div>
+  <div id="onboardingContent"></div>
+</section>
+
+<section id="today" class="screen">
+  <div class="topbar"><span class="logo">ODYSSEY</span><button class="ghost" style="width:auto;padding:6px" onclick="go('settings')">⚙️</button></div>
+  <h2 id="hello">Bonjour 👋</h2>
+  <p class="muted">Ton coach a préparé une mission pour aujourd’hui.</p>
+
+  <div class="card" style="background:var(--soft);border-color:#dce4ff;margin-top:18px">
+    <div class="eyebrow">Mission du jour</div>
+    <h2 style="margin-top:8px">Préparer une réunion client</h2>
+    <p class="muted">Présenter une idée et répondre à une objection avec assurance.</p>
+    <div class="small muted">8 min • Voix • Traduction adaptative</div>
+    <button class="primary" style="margin-top:16px" onclick="startMission()">Commencer</button>
+  </div>
+
+  <div class="card" style="margin-top:18px">
+    <div class="eyebrow">Capacité en cours</div>
+    <h3 style="margin-top:8px">Présenter une idée</h3>
+    <div class="progress"><span id="capabilityProgress" style="width:62%"></span></div>
+  </div>
+
+  <div class="nav">
+    <button onclick="go('today')">Coach</button>
+    <button onclick="startMission()">Mission</button>
+    <button onclick="go('debrief')">Progrès</button>
+    <button onclick="go('settings')">Profil</button>
+  </div>
+</section>
+
+<section id="session" class="screen">
+  <div class="topbar">
+    <button class="secondary" style="width:auto;padding:9px 12px" onclick="go('today')">←</button>
+    <span class="small muted" id="turnCounter">Mission</span>
+  </div>
+
+  <div id="chat" class="chat"></div>
+
+  <div class="center">
+    <button id="voiceBtn" class="voice" onclick="toggleVoice()">🎙️</button>
+    <div id="voiceStatus" class="status">Appuie pour parler</div>
+  </div>
+
+  <div class="controls">
+    <button class="secondary" onclick="speakLastCoach()">🔊 Réécouter</button>
+    <button class="secondary" onclick="finishMission()">Terminer</button>
+  </div>
+  <input id="textReply" class="input" placeholder="Ou écris ta réponse…" style="margin-top:12px">
+  <button class="primary" style="margin-top:10px" onclick="sendTyped()">Envoyer</button>
+</section>
+
+<section id="debrief" class="screen">
+  <div class="topbar"><span class="logo">ODYSSEY</span><span class="small muted">Débrief</span></div>
+  <div class="center">
+    <span class="badge">Mission terminée</span>
+    <div class="result" id="scoreDelta">+8%</div>
+    <h2>Présenter une idée</h2>
+    <p class="muted" id="debriefSummary">Tu as terminé une première mission.</p>
+  </div>
+
+  <div class="card" style="margin-top:20px">
+    <div class="eyebrow">Point fort</div>
+    <p id="strengthText"><strong>Tu as pris la parole.</strong></p>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <div class="eyebrow">Prochaine amélioration</div>
+    <p id="improvementText">Ajoute une raison concrète après ton idée.</p>
+  </div>
+  <div class="stack" style="margin-top:18px">
+    <button class="primary" onclick="startMission()">Rejouer</button>
+    <button class="secondary" onclick="go('today')">Retour à Today</button>
+  </div>
+</section>
+
+<section id="settings" class="screen">
+  <div class="topbar"><button class="secondary" style="width:auto;padding:9px 12px" onclick="go('today')">←</button><span class="logo">PROFIL</span></div>
+  <div class="card">
+    <h3 id="profileName">Profil</h3>
+    <p class="muted small" id="profileContext"></p>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <div class="switch">
+      <span>Traduction</span>
+      <select id="translationMode" onchange="saveSettings()">
+        <option value="always">Toujours afficher</option>
+        <option value="adaptive">Laisser Odyssey décider</option>
+        <option value="on_demand">À la demande</option>
+      </select>
+    </div>
+    <div class="switch">
+      <span>Lecture automatique</span>
+      <input id="autoSpeak" type="checkbox" onchange="saveSettings()">
+    </div>
+  </div>
+
+  <button class="secondary" style="margin-top:16px" onclick="resetProfile()">Réinitialiser le profil</button>
+</section>
+
+</div>
+
+<script>
+const defaultState = {
+  profile:{name:'',goal:'',context:''},
+  settings:{translationMode:'always',autoSpeak:true},
+  progress:{presentIdea:62,sessions:0},
+  onboarded:false
+};
+let state = JSON.parse(localStorage.getItem('odysseyState') || 'null') || structuredClone(defaultState);
+let onboardingStep = 0;
+let recognition = null;
+let listening = false;
+let currentTurn = 0;
+let userReplies = [];
+let lastCoachEnglish = '';
+
+const onboardingSteps = [
+  {
+    html:`<div class="coach"><div class="en">Hi, I’m Alex.</div><div class="fr">Salut, je m’appelle Alex.</div><div class="en" style="margin-top:16px">What’s your name?</div><div class="fr">Comment t’appelles-tu ?</div></div>
+    <input id="onName" class="input" style="margin-top:16px" placeholder="Ton prénom">
+    <button class="primary" style="margin-top:12px" onclick="nextOnboarding()">Continuer</button>`
+  },
+  {
+    html:`<div class="coach"><div class="en">Why are you here today?</div><div class="fr">Pourquoi es-tu ici aujourd’hui ?</div></div>
+    <div class="stack" style="margin-top:16px">
+      <div class="choice" onclick="pickGoal('Work')">💼 Work<div class="fr">Travail</div></div>
+      <div class="choice" onclick="pickGoal('Travel')">🧳 Travel<div class="fr">Voyage</div></div>
+      <div class="choice" onclick="pickGoal('Studies')">🎓 Studies<div class="fr">Études</div></div>
+      <div class="choice" onclick="pickGoal('Personal')">❤️ Personal<div class="fr">Personnel</div></div>
+    </div>`
+  },
+  {
+    html:`<div class="coach"><div class="en">When do you usually need English?</div><div class="fr">Dans quelles situations as-tu généralement besoin de l’anglais ?</div></div>
+    <div class="stack" style="margin-top:16px">
+      <div class="choice" onclick="finishOnboarding('Meetings')">🤝 Meetings<div class="fr">Réunions</div></div>
+      <div class="choice" onclick="finishOnboarding('Clients')">🧑‍💼 Clients<div class="fr">Clients</div></div>
+      <div class="choice" onclick="finishOnboarding('Presentations')">🎤 Presentations<div class="fr">Présentations</div></div>
+      <div class="choice" onclick="finishOnboarding('Interviews')">🗣 Interviews<div class="fr">Entretiens</div></div>
+    </div>`
+  }
+];
+
+const mission = [
+  {
+    en:"You’re meeting a client tomorrow. Present your idea in one sentence.",
+    fr:"Tu rencontres un client demain. Présente ton idée en une phrase."
+  },
+  {
+    en:"Good. Now explain why this idea would be useful for the client.",
+    fr:"Bien. Explique maintenant pourquoi cette idée serait utile pour le client."
+  },
+  {
+    en:"The client says the concept may be too expensive. How would you respond?",
+    fr:"Le client dit que le concept risque d’être trop coûteux. Comment répondrais-tu ?"
+  }
+];
+
+function persist(){ localStorage.setItem('odysseyState', JSON.stringify(state)); }
+function go(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if(id==='today') renderToday();
+  if(id==='settings') renderSettings();
+  window.scrollTo(0,0);
+}
+function startApp(){
+  if(state.onboarded) go('today');
+  else { onboardingStep=0; renderOnboarding(); go('onboarding'); }
+}
+function renderOnboarding(){
+  document.getElementById('onboardingContent').innerHTML = onboardingSteps[onboardingStep].html;
+}
+function nextOnboarding(){
+  const name = document.getElementById('onName').value.trim();
+  if(!name) return alert('Indique ton prénom.');
+  state.profile.name=name; onboardingStep=1; renderOnboarding();
+}
+function pickGoal(goal){ state.profile.goal=goal; onboardingStep=2; renderOnboarding(); }
+function finishOnboarding(context){
+  state.profile.context=context; state.onboarded=true; persist(); go('today');
+}
+function renderToday(){
+  document.getElementById('hello').textContent=`Bonjour ${state.profile.name || ''} 👋`;
+  document.getElementById('capabilityProgress').style.width = `${state.progress.presentIdea}%`;
+}
+function renderSettings(){
+  document.getElementById('profileName').textContent=state.profile.name || 'Profil';
+  document.getElementById('profileContext').textContent=`Objectif : ${state.profile.goal || '—'} • Contexte : ${state.profile.context || '—'}`;
+  document.getElementById('translationMode').value=state.settings.translationMode;
+  document.getElementById('autoSpeak').checked=state.settings.autoSpeak;
+}
+function saveSettings(){
+  state.settings.translationMode=document.getElementById('translationMode').value;
+  state.settings.autoSpeak=document.getElementById('autoSpeak').checked;
+  persist();
+}
+function resetProfile(){
+  localStorage.removeItem('odysseyState');
+  state=structuredClone(defaultState); onboardingStep=0; renderOnboarding(); go('welcome');
+}
+function startMission(){
+  currentTurn=0; userReplies=[]; document.getElementById('chat').innerHTML=''; go('session'); addCoachTurn();
+}
+function shouldShowTranslation(){
+  return state.settings.translationMode !== 'on_demand';
+}
+function addCoachTurn(){
+  if(currentTurn>=mission.length) return finishMission();
+  const m=mission[currentTurn]; lastCoachEnglish=m.en;
+  const wrap=document.createElement('div'); wrap.className='bubble ai';
+  const translationClass=shouldShowTranslation()?'fr translation':'fr translation hidden';
+  wrap.innerHTML=`<div class="en">${m.en}</div><div class="${translationClass}">${m.fr}</div><div class="translation-toggle" onclick="toggleTranslation(this)">${shouldShowTranslation()?'Masquer la traduction':'Afficher la traduction'}</div>`;
+  document.getElementById('chat').appendChild(wrap);
+  document.getElementById('turnCounter').textContent=`Mission • ${currentTurn+1}/${mission.length}`;
+  document.getElementById('chat').scrollTop=9999;
+  if(state.settings.autoSpeak) speak(m.en);
+}
+function toggleTranslation(el){
+  const fr=el.closest('.bubble').querySelector('.translation');
+  fr.classList.toggle('hidden');
+  el.textContent=fr.classList.contains('hidden')?'Afficher la traduction':'Masquer la traduction';
+}
+function addUserReply(text){
+  if(!text.trim()) return;
+  userReplies.push(text.trim());
+  const b=document.createElement('div'); b.className='bubble user'; b.textContent=text.trim();
+  document.getElementById('chat').appendChild(b);
+  currentTurn++;
+  setTimeout(addCoachTurn,350);
+}
+function sendTyped(){
+  const input=document.getElementById('textReply');
+  addUserReply(input.value); input.value='';
+}
+function toggleVoice(){
+  if(listening){ stopRecognition(); return; }
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ alert("La reconnaissance vocale n’est pas prise en charge par ce navigateur. Utilise Chrome ou saisis ta réponse."); return; }
+  recognition=new SR(); recognition.lang='en-US'; recognition.interimResults=false; recognition.continuous=false;
+  recognition.onstart=()=>{listening=true; document.getElementById('voiceBtn').classList.add('listening'); document.getElementById('voiceStatus').textContent='Je t’écoute…'};
+  recognition.onresult=e=>{ const text=e.results[0][0].transcript; addUserReply(text); };
+  recognition.onerror=e=>{ document.getElementById('voiceStatus').textContent='Je n’ai pas bien entendu. Réessaie.'; };
+  recognition.onend=()=>{ listening=false; document.getElementById('voiceBtn').classList.remove('listening'); document.getElementById('voiceStatus').textContent='Appuie pour parler'; };
+  recognition.start();
+}
+function stopRecognition(){ if(recognition) recognition.stop(); }
+function speak(text){
+  if(!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text); u.lang='en-US'; u.rate=.95; speechSynthesis.speak(u);
+}
+function speakLastCoach(){ speak(lastCoachEnglish); }
+function finishMission(){
+  if(currentTurn===0 && userReplies.length===0) return go('today');
+  state.progress.sessions += 1;
+  const gain=Math.min(8, Math.max(3, userReplies.length*2+2));
+  state.progress.presentIdea=Math.min(100,state.progress.presentIdea+gain);
+  persist();
+  const words=userReplies.join(' ').split(/\s+/).filter(Boolean).length;
+  document.getElementById('scoreDelta').textContent=`+${gain}%`;
+  document.getElementById('debriefSummary').textContent=`Tu as répondu ${userReplies.length} fois et produit environ ${words} mots en anglais.`;
+  document.getElementById('strengthText').innerHTML=userReplies.length>=2?'<strong>Tu as développé ton idée sur plusieurs tours.</strong>':'<strong>Tu as pris la parole rapidement.</strong>';
+  document.getElementById('improvementText').textContent=words<15?'Développe davantage tes réponses avec une raison et un exemple.':'Travaille maintenant une réponse plus concise et plus naturelle.';
+  go('debrief');
+}
+</script>
+</body>
+</html>
