@@ -1,6 +1,8 @@
 "use client";
 
+import type { CoachContext } from "@/ai/coach-provider";
 import { LocalCoachProvider } from "@/ai/providers/local-coach-provider";
+import { CoachTurnResponseSchema, type CoachTurn, type CoachTurnResponse } from "@/ai/schemas";
 import { decideCorrectionPolicy, recommendMission } from "@/domain/decision-engine";
 import { updateCapabilityProgress } from "@/domain/capability";
 import { computeSessionDebrief } from "@/domain/debrief";
@@ -37,10 +39,41 @@ import { STATE_SCHEMA_VERSION, type UserStateRepository } from "./state-reposito
 import { SupabaseStateRepository } from "./supabase/state-repository";
 
 const localStorageRepository = new LocalStorageStateRepository();
-const coachProvider = new LocalCoachProvider();
+const localCoachProvider = new LocalCoachProvider();
 
 function createInitialState(): OdysseyState {
   return { schemaVersion: STATE_SCHEMA_VERSION, user: createGuestUserModel(), sessions: [] };
+}
+
+/**
+ * Requests the next coach turn from `/api/coach/turn` (OpenAI-backed when
+ * `OPENAI_API_KEY` is configured server-side, deterministic local fallback
+ * otherwise — the route always labels which one produced the reply). Falls
+ * back to the local provider directly if the request itself fails (e.g. the
+ * device is offline), so a session never gets stuck.
+ */
+async function requestCoachTurn(context: CoachContext): Promise<CoachTurnResponse> {
+  try {
+    const response = await fetch("/api/coach/turn", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        missionId: context.mission.id,
+        turnIndex: context.turnIndex,
+        history: context.history,
+        correctionPolicy: context.correctionPolicy,
+        learnerName: context.user.identity.name,
+        translationMode: context.user.preferences.translationMode,
+        confidenceGlobal: context.user.confidence.global,
+      }),
+    });
+    if (!response.ok) throw new Error(`coach/turn responded with ${response.status}`);
+    return CoachTurnResponseSchema.parse(await response.json());
+  } catch (error) {
+    console.error("[app-state] coach/turn request failed, using local coach", error);
+    const turn: CoachTurn = await localCoachProvider.generateTurn(context);
+    return { turn, source: "local_fallback" };
+  }
 }
 
 interface AppStateValue {
@@ -153,7 +186,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     const correctionPolicy = decideCorrectionPolicy(currentUser.confidence.global);
     const now = new Date();
 
-    const openingTurn = await coachProvider.generateTurn({
+    const { turn: openingTurn, source } = await requestCoachTurn({
       user: currentUser,
       mission,
       turnIndex: 0,
@@ -169,6 +202,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       englishText: openingTurn.english,
       frenchText: openingTurn.french,
       comprehensionRisk: openingTurn.detectedSignals?.comprehensionRisk,
+      source,
       createdAt: now.toISOString(),
     };
 
@@ -217,7 +251,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       text: t.englishText,
     }));
 
-    const nextTurn = await coachProvider.generateTurn({
+    const { turn: nextTurn, source } = await requestCoachTurn({
       user: currentState.user,
       mission,
       turnIndex: coachTurnCount,
@@ -232,6 +266,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       englishText: nextTurn.english,
       frenchText: nextTurn.french,
       comprehensionRisk: nextTurn.detectedSignals?.comprehensionRisk,
+      source,
       createdAt: new Date().toISOString(),
     };
 

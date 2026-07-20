@@ -123,12 +123,36 @@ direct sans passer par notre code). Contournement documenté et isolé dans
 préservée en amont par les fonctions `mapStateTo*Upsert` (testées), seul le
 re-contrôle au point d'appel `.upsert()` est court-circuité.
 
-### Phase 3 — Conversation IA (bloquée par secret `OPENAI_API_KEY`)
+### Phase 3 — Conversation IA
 
-Interface `CoachProvider` avec schéma `CoachTurn` (Zod) déjà définie en
-Phase 1 pour que le fallback déterministe et le futur provider OpenAI soient
-interchangeables sans changement d'UI. Implémentation OpenAI ajoutée dès que
-la clé est disponible.
+Code livré et testé (typecheck/lint/build/unit/e2e tous verts) :
+
+- L'écran de session (`app/session/[sessionId]/page.tsx`) appelle désormais
+  la route serveur `POST /api/coach/turn` (`lib/app-state.tsx`,
+  `requestCoachTurn`) au lieu d'instancier `LocalCoachProvider` côté client.
+  La route sélectionne `OpenAiCoachProvider` quand `OPENAI_API_KEY` est
+  configuré côté serveur, et retombe sur le fournisseur local déterministe
+  sinon — dans les deux cas la réponse porte un champ `source` (`"openai"`
+  ou `"local_fallback"`).
+- Si la requête réseau vers la route échoue elle-même (hors ligne), le
+  client retombe directement sur `LocalCoachProvider` en local, avec le
+  même label `local_fallback` — la session ne reste jamais bloquée.
+- Le label de secours est visible dans l'UI : `CoachMessage` affiche
+  « Mode hors ligne » au-dessus de toute réponse dont `source ===
+"local_fallback"`, pour ne jamais faire croire à une conversation IA
+  générative quand ce n'est pas le cas (AGENTS.md, `ODYSSEY_MASTER_PROMPT_CODEX.md`
+  §21).
+- `ConversationTurn.source` est persisté tel quel dans `localStorage` (mode
+  invité, blob JSON complet). **Limitation connue** : la table Supabase
+  `conversation_turns` n'a pas encore de colonne `source`, donc pour les
+  comptes authentifiés ce label n'est pas restitué après un rechargement
+  depuis la base (uniquement pendant la session live). Sans impact sur le
+  fonctionnement réel — à ajouter dans une migration ultérieure si
+  l'historique exact du fournisseur devient nécessaire.
+
+**Statut** : le code fonctionne dès aujourd'hui en mode hors ligne
+déterministe (aucune clé requise). Passage à la conversation IA générative
+réelle en attente d'une clé `OPENAI_API_KEY` fournie par l'utilisateur.
 
 ### Phase 4 — Voix
 

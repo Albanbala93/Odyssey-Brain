@@ -113,6 +113,7 @@ export default function SessionPage() {
                 comprehensionRisk: turn.comprehensionRisk,
               })}
               onToggleTranslation={(visible) => recordTranslationToggle(sessionId, visible)}
+              source={turn.source}
             />
           ) : (
             <UserMessage key={turn.id} text={turn.englishText} />
