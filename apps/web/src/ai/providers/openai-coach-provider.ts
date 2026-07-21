@@ -3,13 +3,26 @@ import { COACH_SYSTEM_PROMPT } from "../prompts/coach-system-prompt";
 import type { CoachContext, CoachProvider } from "../coach-provider";
 import { CoachTurnSchema, type CoachTurn } from "../schemas";
 
+// OpenAI's Structured Outputs (`strict: true`) require every key in
+// `properties` to also appear in `required` — there is no separate concept
+// of an optional key. A field that's logically optional must instead allow
+// `null` in its `type` and still be listed as required; the caller then
+// treats `null` the same as "omitted" (see CoachTurnSchema's `.nullish()`).
 const COACH_TURN_JSON_SCHEMA = {
   name: "coach_turn",
   strict: true,
   schema: {
     type: "object",
     additionalProperties: false,
-    required: ["english", "french", "intent", "difficulty", "shouldCorrectNow"],
+    required: [
+      "english",
+      "french",
+      "intent",
+      "difficulty",
+      "shouldCorrectNow",
+      "correction",
+      "detectedSignals",
+    ],
     properties: {
       english: { type: "string" },
       french: { type: "string" },
@@ -17,7 +30,7 @@ const COACH_TURN_JSON_SCHEMA = {
       difficulty: { type: "integer", enum: [1, 2, 3, 4, 5] },
       shouldCorrectNow: { type: "boolean" },
       correction: {
-        type: "object",
+        type: ["object", "null"],
         additionalProperties: false,
         required: ["original", "improved", "explanationFr"],
         properties: {
@@ -27,12 +40,13 @@ const COACH_TURN_JSON_SCHEMA = {
         },
       },
       detectedSignals: {
-        type: "object",
+        type: ["object", "null"],
         additionalProperties: false,
+        required: ["hesitation", "confidence", "comprehensionRisk"],
         properties: {
-          hesitation: { type: "number" },
-          confidence: { type: "number" },
-          comprehensionRisk: { type: "number" },
+          hesitation: { type: ["number", "null"] },
+          confidence: { type: ["number", "null"] },
+          comprehensionRisk: { type: ["number", "null"] },
         },
       },
     },
@@ -79,7 +93,10 @@ export class OpenAiCoachProvider implements CoachProvider {
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI request failed with status ${response.status}`);
+      const body = await response.text().catch(() => "");
+      throw new Error(
+        `OpenAI request failed with status ${response.status}: ${body.slice(0, 500)}`,
+      );
     }
 
     const payload = (await response.json()) as {
