@@ -12,20 +12,42 @@ export const CoachTurnSchema = z.object({
   intent: z.enum(["prompt", "follow_up", "challenge", "support", "wrap_up"]),
   difficulty: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
   shouldCorrectNow: z.boolean(),
+  // `.nullish()` + a normalizing transform because the OpenAI provider's
+  // strict Structured Outputs schema sends `null` for an absent optional
+  // field (it has no concept of "omitted"), while the deterministic local
+  // provider simply omits the key (`undefined`) — both must validate the
+  // same way, and downstream code only ever needs to check `=== undefined`.
   correction: z
     .object({
       original: z.string(),
       improved: z.string(),
       explanationFr: z.string(),
     })
-    .optional(),
+    .nullish()
+    .transform((v) => v ?? undefined),
   detectedSignals: z
     .object({
-      hesitation: z.number().min(0).max(1).optional(),
-      confidence: z.number().min(0).max(1).optional(),
-      comprehensionRisk: z.number().min(0).max(1).optional(),
+      hesitation: z
+        .number()
+        .min(0)
+        .max(1)
+        .nullish()
+        .transform((v) => v ?? undefined),
+      confidence: z
+        .number()
+        .min(0)
+        .max(1)
+        .nullish()
+        .transform((v) => v ?? undefined),
+      comprehensionRisk: z
+        .number()
+        .min(0)
+        .max(1)
+        .nullish()
+        .transform((v) => v ?? undefined),
     })
-    .optional(),
+    .nullish()
+    .transform((v) => v ?? undefined),
 });
 
 export type CoachTurn = z.infer<typeof CoachTurnSchema>;
