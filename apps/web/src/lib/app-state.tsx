@@ -131,14 +131,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       } else if (user) {
         // Authenticated but no account data yet (first sign-in): migrate
         // whatever guest/local progress exists into the new account
-        // (ODYSSEY_MASTER_PROMPT_CODEX.md §5.1 guest upgrade path).
+        // (ODYSSEY_MASTER_PROMPT_CODEX.md §5.1 guest upgrade path). A fresh
+        // id is minted for the account rather than reusing the local guest
+        // one, since the two identities are conceptually distinct.
         const guestState = (await localStorageRepository.load()) ?? stateRef.current;
+        const newUserId = createId();
         const migrated: OdysseyState = {
           ...guestState,
           user: {
             ...guestState.user,
-            identity: { ...guestState.user.identity, isGuest: false },
+            identity: { ...guestState.user.identity, id: newUserId, isGuest: false },
           },
+          sessions: guestState.sessions.map((s) => ({ ...s, userId: newUserId })),
         };
         await repository.save(migrated);
         if (!cancelled) setState(migrated);
@@ -194,9 +198,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       correctionPolicy,
     });
 
-    const sessionId = createId("session");
+    const sessionId = createId();
     const coachTurn: ConversationTurn = {
-      id: createId("turn"),
+      id: createId(),
       turnIndex: 0,
       role: "coach",
       englishText: openingTurn.english,
@@ -239,7 +243,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     const coachTurnCount = session.turns.filter((t) => t.role === "coach").length;
 
     const userTurn: ConversationTurn = {
-      id: createId("turn"),
+      id: createId(),
       turnIndex: session.turns.length,
       role: "user",
       englishText: trimmed,
@@ -260,7 +264,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     });
 
     const coachTurn: ConversationTurn = {
-      id: createId("turn"),
+      id: createId(),
       turnIndex: userTurn.turnIndex + 1,
       role: "coach",
       englishText: nextTurn.english,

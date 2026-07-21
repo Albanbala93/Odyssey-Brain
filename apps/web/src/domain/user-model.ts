@@ -11,7 +11,7 @@ export function createGuestUserModel(now: Date = new Date()): UserModel {
   const iso = now.toISOString();
   return {
     identity: {
-      id: createId("guest"),
+      id: createId(),
       nativeLanguage: "fr",
       targetLanguage: "en",
       isGuest: true,
@@ -77,7 +77,7 @@ export function applyOnboardingAnswers(
     },
     goals: [
       {
-        id: createId("goal"),
+        id: createId(),
         category: answers.goalCategory,
         label: answers.goalCategory,
         priority: 1,
@@ -85,7 +85,7 @@ export function applyOnboardingAnswers(
       },
     ],
     contexts: answers.situations.map((label) => ({
-      id: createId("ctx"),
+      id: createId(),
       type: "other" as const,
       label,
     })),
@@ -93,7 +93,7 @@ export function applyOnboardingAnswers(
       ? [
           ...user.memories,
           {
-            id: createId("mem"),
+            id: createId(),
             category: "professional_context" as const,
             content: answers.professionalContext,
             source: "declared" as const,
