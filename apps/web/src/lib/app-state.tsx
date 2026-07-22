@@ -267,6 +267,23 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       text: t.englishText,
     }));
 
+    // Show the learner's own message as soon as they send it, rather than
+    // holding it back until the coach's reply arrives — the round trip to
+    // the AI provider can take a couple of seconds, and bundling both turns
+    // into one update made the UI look unresponsive until it resolved.
+    setState((prev) => ({
+      ...prev,
+      sessions: prev.sessions.map((s) =>
+        s.id === sessionId
+          ? {
+              ...s,
+              turns: [...s.turns, userTurn],
+              learnerWordCount: s.learnerWordCount + countWords(trimmed),
+            }
+          : s,
+      ),
+    }));
+
     const { turn: nextTurn, source } = await requestCoachTurn({
       user: currentState.user,
       mission,
@@ -292,8 +309,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         s.id === sessionId
           ? {
               ...s,
-              turns: [...s.turns, userTurn, coachTurn],
-              learnerWordCount: s.learnerWordCount + countWords(trimmed),
+              turns: [...s.turns, coachTurn],
               coachWordCount: s.coachWordCount + countWords(nextTurn.english),
             }
           : s,
