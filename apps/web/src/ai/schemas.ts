@@ -59,3 +59,16 @@ export const CoachTurnResponseSchema = z.object({
 });
 
 export type CoachTurnResponse = z.infer<typeof CoachTurnResponseSchema>;
+
+/**
+ * Envelope returned by the voice transcription API route
+ * (ODYSSEY_MASTER_PROMPT_CODEX.md §5.7). `confidence` is a best-effort
+ * heuristic (see openai-transcription-provider.ts) — absent when the
+ * underlying provider didn't return enough information to compute one.
+ */
+export const TranscriptionResponseSchema = z.object({
+  text: z.string().min(1),
+  confidence: z.number().min(0).max(1).optional(),
+});
+
+export type TranscriptionResponse = z.infer<typeof TranscriptionResponseSchema>;

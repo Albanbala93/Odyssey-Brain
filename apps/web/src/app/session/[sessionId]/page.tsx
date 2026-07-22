@@ -65,12 +65,12 @@ export default function SessionPage() {
   const totalExpectedTurns = mission.scriptedTurns.length + 1;
   const coachTurnsSoFar = session.turns.filter((t) => t.role === "coach").length;
 
-  async function handleSend(text: string) {
+  async function handleSend(text: string, transcriptionConfidence?: number) {
     if (!text.trim() || isSending || session!.status !== "in_progress") return;
     setIsSending(true);
     setError(null);
     try {
-      await submitUserTurn(sessionId, text);
+      await submitUserTurn(sessionId, text, transcriptionConfidence);
       setDraft("");
     } catch {
       setError("La réponse du coach n'a pas pu être générée. Réessaie.");
