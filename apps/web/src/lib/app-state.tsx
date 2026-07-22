@@ -410,14 +410,27 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setState(createInitialState());
   }, [user, signOut]);
 
-  const getSession = useCallback((sessionId: string) => {
-    return stateRef.current.sessions.find((s) => s.id === sessionId);
-  }, []);
+  // Unlike the action callbacks above (startMission, submitUserTurn…),
+  // these read `state` directly rather than `stateRef.current`: they're
+  // called during render (session/page.tsx reads `getSession(id)` to decide
+  // what to display), and `stateRef.current` is only resynced by an effect
+  // after commit — one render behind. Reading it here meant a just-arrived
+  // coach turn wouldn't show up until some unrelated re-render (e.g. typing
+  // in the reply box) happened to run after the ref had caught up.
+  const getSession = useCallback(
+    (sessionId: string) => {
+      return state.sessions.find((s) => s.id === sessionId);
+    },
+    [state],
+  );
 
-  const getMissionForSession = useCallback((sessionId: string) => {
-    const session = stateRef.current.sessions.find((s) => s.id === sessionId);
-    return session ? getMissionById(session.missionId) : undefined;
-  }, []);
+  const getMissionForSession = useCallback(
+    (sessionId: string) => {
+      const session = state.sessions.find((s) => s.id === sessionId);
+      return session ? getMissionById(session.missionId) : undefined;
+    },
+    [state],
+  );
 
   const value = useMemo<AppStateValue>(
     () => ({
