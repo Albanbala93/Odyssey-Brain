@@ -154,8 +154,6 @@ debrief) a été revérifié de bout en bout sans erreur.
 
 ### Phase 3 — Conversation IA
 
-### Phase 3 — Conversation IA
-
 Code livré et testé (typecheck/lint/build/unit/e2e tous verts) :
 
 - L'écran de session (`app/session/[sessionId]/page.tsx`) appelle désormais
@@ -181,9 +179,18 @@ Code livré et testé (typecheck/lint/build/unit/e2e tous verts) :
   fonctionnement réel — à ajouter dans une migration ultérieure si
   l'historique exact du fournisseur devient nécessaire.
 
-**Statut** : le code fonctionne dès aujourd'hui en mode hors ligne
-déterministe (aucune clé requise). Passage à la conversation IA générative
-réelle en attente d'une clé `OPENAI_API_KEY` fournie par l'utilisateur.
+**Statut : vérifié en conditions réelles (2026-07-22).** `OPENAI_API_KEY`
+fournie par l'utilisateur, configurée en local et sur Vercel. Corrigé au
+passage : le schéma JSON strict envoyé à OpenAI (Structured Outputs,
+`strict: true`) marquait `correction` et `detectedSignals` comme optionnels
+sans les lister dans `required`, ce qu'OpenAI rejette avec un 400 avant
+même de générer une réponse — chaque appel réel échouait silencieusement
+et retombait en mode hors ligne. Les deux champs sont désormais
+nullable-et-obligatoires (voir `openai-coach-provider.ts`), et le corps de
+réponse d'une erreur OpenAI est maintenant journalisé en entier plutôt que
+le seul code de statut. Conversation IA générative confirmée fonctionnelle
+de bout en bout (local et production), label « Mode hors ligne » absent
+quand OpenAI répond normalement.
 
 ### Phase 4 — Voix
 
