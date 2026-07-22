@@ -123,6 +123,37 @@ direct sans passer par notre code). Contournement documenté et isolé dans
 préservée en amont par les fonctions `mapStateTo*Upsert` (testées), seul le
 re-contrôle au point d'appel `.upsert()` est court-circuité.
 
+**Bugs trouvés et corrigés lors de la vérification live** (tous les 4 avec
+un utilisateur réel, projet Supabase réel) :
+
+- `createId()` préfixait chaque identifiant généré côté app
+  (`session_...`, `turn_...`, `guest_...`, etc.), incompatible avec les
+  colonnes Postgres `uuid` des tables normalisées — toute écriture pour un
+  compte authentifié échouait silencieusement. `createId()` retourne
+  désormais toujours un UUID v4 nu.
+- `SupabaseStateRepository.load()` confondait « aucun profil n'existe
+  encore » (cas normal en première connexion) et « la requête a échoué »
+  (erreur réseau/RLS) — les deux retournaient `null`, ce qui pouvait
+  redéclencher la bascule invité→compte sur un compte déjà existant et
+  casser sa clé primaire (violation de la FK `user_preferences.user_id`).
+  `load()` lève désormais une erreur explicite dans ce second cas.
+- `save()` écrivait les tours de conversation (`conversation_turns`) dans
+  le même `Promise.all` que leur session parente ; la policy RLS de
+  `conversation_turns` exige que la session référencée existe déjà, et les
+  deux requêtes PostgREST étant indépendantes, le tour pouvait arriver
+  avant que la session ne soit committée. Les tours sont désormais écrits
+  dans un second lot, après confirmation de l'écriture des sessions.
+- Le schéma JSON strict envoyé à OpenAI (voir Phase 3) marquait deux champs
+  comme optionnels sans les lister dans `required`, ce qu'OpenAI rejette
+  en mode `strict: true` — corrigé en parallèle du bug ci-dessus lors de
+  la même session de debug.
+
+Après ces 4 correctifs, le parcours complet (invité → connexion par lien
+magique → bascule de compte → missions avec conversation IA réelle →
+debrief) a été revérifié de bout en bout sans erreur.
+
+### Phase 3 — Conversation IA
+
 ### Phase 3 — Conversation IA
 
 Code livré et testé (typecheck/lint/build/unit/e2e tous verts) :
