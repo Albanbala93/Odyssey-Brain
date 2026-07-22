@@ -123,12 +123,24 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     async function hydrate() {
-      const loaded = await repository.load();
+      let loaded: OdysseyState | null = null;
+      let loadFailed = false;
+      try {
+        loaded = await repository.load();
+      } catch (error) {
+        // A real query error (network, RLS, etc.) is not the same as "no
+        // profile exists yet" — treating it as the latter would re-run the
+        // guest-to-account migration below against an account that already
+        // has one, minting a new id that collides with existing foreign
+        // keys. Leave the current state untouched and let the user retry.
+        console.error("[app-state] failed to load account state", error);
+        loadFailed = true;
+      }
       if (cancelled) return;
 
       if (loaded) {
         setState(loaded);
-      } else if (user) {
+      } else if (user && !loadFailed) {
         // Authenticated but no account data yet (first sign-in): migrate
         // whatever guest/local progress exists into the new account
         // (ODYSSEY_MASTER_PROMPT_CODEX.md §5.1 guest upgrade path). A fresh

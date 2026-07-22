@@ -77,8 +77,14 @@ export class SupabaseStateRepository implements UserStateRepository {
       .returns<ProfileRow>();
 
     if (profileError) {
+      // Distinct from "no profile row exists yet" (which `.maybeSingle()`
+      // reports as `data: null, error: null`, handled below): a real query
+      // error here must not be treated as "first sign-in" by the caller, or
+      // it re-runs the guest-to-account migration against an account that
+      // already exists, minting a new profile id that conflicts with
+      // existing foreign keys (e.g. user_preferences.user_id).
       console.error("[SupabaseStateRepository] failed to load profile", profileError);
-      return null;
+      throw new Error("Failed to load Supabase profile");
     }
     if (!profile) return null;
 
