@@ -26,6 +26,7 @@ import {
 } from "@/domain/user-model";
 import { useAuth } from "@/lib/auth/auth-context";
 import { createId } from "@/lib/id";
+import { trackEvent } from "@/lib/analytics";
 import { countWords } from "@/lib/text";
 import {
   createContext,
@@ -96,6 +97,8 @@ interface AppStateValue {
   finishSession: (sessionId: string) => void;
   recordTranslationToggle: (sessionId: string, visible: boolean) => void;
   updatePreferences: (partial: Partial<UserModel["preferences"]>) => void;
+  updateConsent: (partial: Partial<Omit<UserModel["consent"], "version" | "updatedAt">>) => void;
+  deleteMemory: (memoryId: string) => void;
   resetProfile: () => void;
   deleteAccount: () => Promise<void>;
   getSession: (sessionId: string) => Session | undefined;
@@ -169,6 +172,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         };
         await repository.save(migrated);
         if (!cancelled) setState(migrated);
+        trackEvent("account_created", migrated.user.consent.analytics, {
+          sessionsCarriedOver: migrated.sessions.length,
+        });
       }
 
       if (!cancelled) setIsReady(true);
@@ -195,6 +201,32 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         ...prev.user,
         preferences: { ...prev.user.preferences, ...partial },
         updatedAt: new Date().toISOString(),
+      },
+    }));
+  }, []);
+
+  // Phase 6 privacy control: consent was previously read-only in the UI —
+  // this is the only place `UserModel.consent` is ever mutated by the user
+  // themselves (ODYSSEY_MASTER_PROMPT_CODEX.md §10, docs/PRIVACY_MODEL.md).
+  const updateConsent = useCallback(
+    (partial: Partial<Omit<UserModel["consent"], "version" | "updatedAt">>) => {
+      setState((prev) => ({
+        ...prev,
+        user: {
+          ...prev.user,
+          consent: { ...prev.user.consent, ...partial, updatedAt: new Date().toISOString() },
+        },
+      }));
+    },
+    [],
+  );
+
+  const deleteMemory = useCallback((memoryId: string) => {
+    setState((prev) => ({
+      ...prev,
+      user: {
+        ...prev.user,
+        memories: prev.user.memories.filter((m) => m.id !== memoryId),
       },
     }));
   }, []);
@@ -249,6 +281,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     };
 
     setState((prev) => ({ ...prev, sessions: [...prev.sessions, session] }));
+    trackEvent("session_started", currentUser.consent.analytics, {
+      missionId: mission.id,
+      contextType: mission.contextType,
+    });
     return sessionId;
   }, []);
 
@@ -442,6 +478,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         ),
       };
     });
+    trackEvent("session_completed", currentState.user.consent.analytics, {
+      missionId: mission.id,
+      scoreDelta: debrief.scoreDelta,
+      learnerWordCount: debrief.learnerWordCount,
+    });
   }, []);
 
   const recordTranslationToggle = useCallback((sessionId: string, visible: boolean) => {
@@ -502,6 +543,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       finishSession,
       recordTranslationToggle,
       updatePreferences,
+      updateConsent,
+      deleteMemory,
       resetProfile,
       deleteAccount,
       getSession,
@@ -517,6 +560,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       finishSession,
       recordTranslationToggle,
       updatePreferences,
+      updateConsent,
+      deleteMemory,
       resetProfile,
       deleteAccount,
       getSession,

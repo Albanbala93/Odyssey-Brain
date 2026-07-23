@@ -12,7 +12,8 @@ import { useEffect, useState } from "react";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { state, isReady, updatePreferences, resetProfile, deleteAccount } = useAppState();
+  const { state, isReady, updatePreferences, updateConsent, resetProfile, deleteAccount } =
+    useAppState();
   const { user, supabaseConfigured, signOut } = useAuth();
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -49,6 +50,20 @@ export default function SettingsPage() {
   async function handleSignOut() {
     await signOut();
     router.push("/welcome");
+  }
+
+  // ODYSSEY_MASTER_PROMPT_CODEX.md §5.11 data export: everything Odyssey
+  // holds about the learner is already loaded client-side as `state` (guest
+  // or authenticated, same shape either way), so exporting it is a direct
+  // download with no extra server round-trip.
+  function handleExportData() {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `odyssey-export-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -126,14 +141,63 @@ export default function SettingsPage() {
           </label>
         </Card>
 
-        <Card>
+        <Card className="flex flex-col gap-4">
           <p className="text-sm font-semibold">Confidentialité</p>
-          <p className="text-muted mt-1 text-xs">
-            Consentements enregistrés : stockage vocal{" "}
-            {state.user.consent.storeVoice ? "activé" : "désactivé"}, mémoire personnelle{" "}
-            {state.user.consent.storePersonalMemory ? "activée" : "désactivée"}, analytics{" "}
-            {state.user.consent.analytics ? "activé" : "désactivé"}.
-          </p>
+
+          <label className="flex items-center justify-between gap-4 text-sm font-medium">
+            <span>
+              Stockage vocal
+              <span className="text-muted block text-xs font-normal">
+                Conserver l&apos;audio de tes réponses (sinon seule la transcription texte est
+                gardée).
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={state.user.consent.storeVoice}
+              onChange={(e) => updateConsent({ storeVoice: e.target.checked })}
+              className="h-5 w-5 shrink-0"
+            />
+          </label>
+
+          <label className="flex items-center justify-between gap-4 text-sm font-medium">
+            <span>
+              Mémoire personnelle
+              <span className="text-muted block text-xs font-normal">
+                Autoriser Odyssey à retenir des faits sur toi entre les sessions (objectifs,
+                réussites…).
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={state.user.consent.storePersonalMemory}
+              onChange={(e) => updateConsent({ storePersonalMemory: e.target.checked })}
+              className="h-5 w-5 shrink-0"
+            />
+          </label>
+
+          <label className="flex items-center justify-between gap-4 text-sm font-medium">
+            <span>
+              Analytics
+              <span className="text-muted block text-xs font-normal">
+                Autoriser la mesure d&apos;usage anonymisée pour améliorer l&apos;app.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              checked={state.user.consent.analytics}
+              onChange={(e) => updateConsent({ analytics: e.target.checked })}
+              className="h-5 w-5 shrink-0"
+            />
+          </label>
+
+          <Button variant="secondary" onClick={() => router.push("/settings/memories")}>
+            Ce qu&apos;Odyssey retient de moi ({state.user.memories.length})
+          </Button>
+
+          <Button variant="secondary" onClick={handleExportData}>
+            Exporter mes données
+          </Button>
         </Card>
 
         <div className="mt-auto flex flex-col gap-2">

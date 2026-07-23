@@ -11,9 +11,10 @@ const variantClasses: Record<NonNullable<ButtonProps["variant"]>, string> = {
   ghost: "bg-transparent text-accent hover:bg-accent-soft",
 };
 
-export function Button({ variant = "primary", className, ...props }: ButtonProps) {
+export function Button({ variant = "primary", className, type = "button", ...props }: ButtonProps) {
   return (
     <button
+      type={type}
       className={clsx(
         "w-full rounded-2xl px-5 py-3.5 text-base font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
         variantClasses[variant],

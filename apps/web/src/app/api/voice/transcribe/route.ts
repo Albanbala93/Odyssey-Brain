@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import { OpenAiTranscriptionProvider } from "@/ai/providers/openai-transcription-provider";
 import { TranscriptionResponseSchema } from "@/ai/schemas";
+import { checkRateLimit, getClientKey } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
 // Generous enough for a single spoken reply (well under a typical mission
 // turn's length) while keeping the request body bounded.
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
+// Lower than the coach route's limit — a spoken reply is naturally slower
+// to produce than a typed one, so legitimate usage never comes close.
+const MAX_REQUESTS_PER_MINUTE = 20;
 
 /**
  * Server-side voice transcription (ODYSSEY_MASTER_PROMPT_CODEX.md §5.7).
@@ -15,13 +19,12 @@ const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
  * body and always has a fallback path (Web Speech API, then plain text) for
  * every response short of 200 — voice is never a hard requirement to
  * complete a mission.
- */
-/**
- * Cheap capability probe so the client can choose server transcription vs.
- * the Web Speech API fallback *before* requesting microphone access, rather
- * than discovering "not configured" only after already recording (which
- * would mean prompting for the mic twice — once for each method). Reveals
- * only a boolean, never the key itself.
+ *
+ * `GET` is a cheap capability probe so the client can choose server
+ * transcription vs. the Web Speech API fallback *before* requesting
+ * microphone access, rather than discovering "not configured" only after
+ * already recording (which would mean prompting for the mic twice — once
+ * per method). Reveals only a boolean, never the key itself.
  */
 export async function GET(): Promise<NextResponse> {
   return NextResponse.json({ available: Boolean(process.env.OPENAI_API_KEY) });
@@ -30,6 +33,10 @@ export async function GET(): Promise<NextResponse> {
 export async function POST(request: Request): Promise<NextResponse> {
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({ error: "Voice transcription is not configured" }, { status: 501 });
+  }
+
+  if (!checkRateLimit(getClientKey(request), MAX_REQUESTS_PER_MINUTE)) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
 
   const contentLength = Number(request.headers.get("content-length") ?? "0");

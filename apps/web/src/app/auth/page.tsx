@@ -65,6 +65,7 @@ export default function AuthPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="ton@email.com"
+              aria-label="Adresse e-mail"
               className="border-border bg-surface rounded-2xl border px-4 py-3.5 text-base"
             />
             {status === "error" && errorMessage && (
