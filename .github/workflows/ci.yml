@@ -43,3 +43,12 @@ jobs:
 
       - name: E2E tests
         run: pnpm --filter web test:e2e
+
+      - name: Dependency audit
+        # Informational, not blocking: pnpm's minimumReleaseAge policy
+        # (pnpm-workspace.yaml) already guards against fresh supply-chain
+        # attacks, and a hard-fail here would block merges on advisories in
+        # transitive deps this team can't immediately fix. Surfacing it in
+        # CI logs is still strictly better than not checking at all.
+        run: pnpm audit --audit-level=high
+        continue-on-error: true

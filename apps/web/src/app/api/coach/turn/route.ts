@@ -6,8 +6,14 @@ import type { CoachContext } from "@/ai/coach-provider";
 import { CoachTurnResponseSchema } from "@/ai/schemas";
 import { getMissionById } from "@/domain/missions";
 import { createGuestUserModel } from "@/domain/user-model";
+import { checkRateLimit, getClientKey } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
+
+// Generous for a real conversation (a mission is ~4-6 turns) while still
+// bounding the cost/abuse surface of the only route that can call OpenAI's
+// paid chat API. See lib/rate-limit.ts for this limiter's real scope.
+const MAX_REQUESTS_PER_MINUTE = 30;
 
 /**
  * Server-side coach turn generation (ODYSSEY_MASTER_PROMPT_CODEX.md §5.8,
@@ -47,6 +53,10 @@ const RequestSchema = z.object({
 });
 
 export async function POST(request: Request): Promise<NextResponse> {
+  if (!checkRateLimit(getClientKey(request), MAX_REQUESTS_PER_MINUTE)) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   let parsedBody: z.infer<typeof RequestSchema>;
   try {
     const json = await request.json();

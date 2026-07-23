@@ -139,6 +139,7 @@ export default function SessionPage() {
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend(draft)}
                 placeholder="Ou écris ta réponse…"
+                aria-label="Ta réponse"
                 disabled={isSending}
                 className="border-border bg-surface flex-1 rounded-2xl border px-4 py-3 text-base"
               />
