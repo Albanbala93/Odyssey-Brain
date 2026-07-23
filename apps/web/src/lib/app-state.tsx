@@ -81,7 +81,11 @@ interface AppStateValue {
   isReady: boolean;
   completeOnboarding: (answers: OnboardingAnswers) => void;
   startMission: (missionId?: string) => Promise<string>;
-  submitUserTurn: (sessionId: string, text: string) => Promise<void>;
+  submitUserTurn: (
+    sessionId: string,
+    text: string,
+    transcriptionConfidence?: number,
+  ) => Promise<void>;
   finishSession: (sessionId: string) => void;
   recordTranslationToggle: (sessionId: string, visible: boolean) => void;
   updatePreferences: (partial: Partial<UserModel["preferences"]>) => void;
@@ -241,81 +245,85 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     return sessionId;
   }, []);
 
-  const submitUserTurn = useCallback(async (sessionId: string, text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
+  const submitUserTurn = useCallback(
+    async (sessionId: string, text: string, transcriptionConfidence?: number) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
 
-    const currentState = stateRef.current;
-    const session = currentState.sessions.find((s) => s.id === sessionId);
-    if (!session || session.status !== "in_progress") return;
-    const mission = getMissionById(session.missionId);
-    if (!mission) return;
+      const currentState = stateRef.current;
+      const session = currentState.sessions.find((s) => s.id === sessionId);
+      if (!session || session.status !== "in_progress") return;
+      const mission = getMissionById(session.missionId);
+      if (!mission) return;
 
-    const correctionPolicy = decideCorrectionPolicy(currentState.user.confidence.global);
-    const coachTurnCount = session.turns.filter((t) => t.role === "coach").length;
+      const correctionPolicy = decideCorrectionPolicy(currentState.user.confidence.global);
+      const coachTurnCount = session.turns.filter((t) => t.role === "coach").length;
 
-    const userTurn: ConversationTurn = {
-      id: createId(),
-      turnIndex: session.turns.length,
-      role: "user",
-      englishText: trimmed,
-      createdAt: new Date().toISOString(),
-    };
+      const userTurn: ConversationTurn = {
+        id: createId(),
+        turnIndex: session.turns.length,
+        role: "user",
+        englishText: trimmed,
+        transcriptionConfidence,
+        createdAt: new Date().toISOString(),
+      };
 
-    const history = [...session.turns, userTurn].map((t) => ({
-      role: t.role,
-      text: t.englishText,
-    }));
+      const history = [...session.turns, userTurn].map((t) => ({
+        role: t.role,
+        text: t.englishText,
+      }));
 
-    // Show the learner's own message as soon as they send it, rather than
-    // holding it back until the coach's reply arrives — the round trip to
-    // the AI provider can take a couple of seconds, and bundling both turns
-    // into one update made the UI look unresponsive until it resolved.
-    setState((prev) => ({
-      ...prev,
-      sessions: prev.sessions.map((s) =>
-        s.id === sessionId
-          ? {
-              ...s,
-              turns: [...s.turns, userTurn],
-              learnerWordCount: s.learnerWordCount + countWords(trimmed),
-            }
-          : s,
-      ),
-    }));
+      // Show the learner's own message as soon as they send it, rather than
+      // holding it back until the coach's reply arrives — the round trip to
+      // the AI provider can take a couple of seconds, and bundling both turns
+      // into one update made the UI look unresponsive until it resolved.
+      setState((prev) => ({
+        ...prev,
+        sessions: prev.sessions.map((s) =>
+          s.id === sessionId
+            ? {
+                ...s,
+                turns: [...s.turns, userTurn],
+                learnerWordCount: s.learnerWordCount + countWords(trimmed),
+              }
+            : s,
+        ),
+      }));
 
-    const { turn: nextTurn, source } = await requestCoachTurn({
-      user: currentState.user,
-      mission,
-      turnIndex: coachTurnCount,
-      history,
-      correctionPolicy,
-    });
+      const { turn: nextTurn, source } = await requestCoachTurn({
+        user: currentState.user,
+        mission,
+        turnIndex: coachTurnCount,
+        history,
+        correctionPolicy,
+      });
 
-    const coachTurn: ConversationTurn = {
-      id: createId(),
-      turnIndex: userTurn.turnIndex + 1,
-      role: "coach",
-      englishText: nextTurn.english,
-      frenchText: nextTurn.french,
-      comprehensionRisk: nextTurn.detectedSignals?.comprehensionRisk,
-      source,
-      createdAt: new Date().toISOString(),
-    };
+      const coachTurn: ConversationTurn = {
+        id: createId(),
+        turnIndex: userTurn.turnIndex + 1,
+        role: "coach",
+        englishText: nextTurn.english,
+        frenchText: nextTurn.french,
+        comprehensionRisk: nextTurn.detectedSignals?.comprehensionRisk,
+        source,
+        createdAt: new Date().toISOString(),
+      };
 
-    setState((prev) => ({
-      ...prev,
-      sessions: prev.sessions.map((s) =>
-        s.id === sessionId
-          ? {
-              ...s,
-              turns: [...s.turns, coachTurn],
-              coachWordCount: s.coachWordCount + countWords(nextTurn.english),
-            }
-          : s,
-      ),
-    }));
-  }, []);
+      setState((prev) => ({
+        ...prev,
+        sessions: prev.sessions.map((s) =>
+          s.id === sessionId
+            ? {
+                ...s,
+                turns: [...s.turns, coachTurn],
+                coachWordCount: s.coachWordCount + countWords(nextTurn.english),
+              }
+            : s,
+        ),
+      }));
+    },
+    [],
+  );
 
   const finishSession = useCallback((sessionId: string) => {
     const currentState = stateRef.current;

@@ -194,10 +194,47 @@ quand OpenAI répond normalement.
 
 ### Phase 4 — Voix
 
-Web Speech API déjà en fallback navigateur dans le prototype V2 ; portée en
-Phase 1 comme option (dégradation gracieuse vers texte). Transcription
-serveur (Whisper/Realtime) ajoutée en Phase 4 quand `OPENAI_API_KEY` est
-disponible.
+Code livré et testé (typecheck/lint/build/unit/e2e tous verts, vérifié
+visuellement dans un vrai navigateur) :
+
+- Nouvelle route serveur `POST /api/voice/transcribe`
+  (`src/app/api/voice/transcribe/route.ts`) : reçoit l'audio enregistré tel
+  quel (pas de multipart), l'envoie à l'API de transcription OpenAI Whisper
+  (`OpenAiTranscriptionProvider`, `src/ai/providers/openai-transcription-provider.ts`,
+  `server-only`) quand `OPENAI_API_KEY` est configuré. Un `GET` sur la même
+  route expose uniquement un booléen `available` (jamais la clé) pour que le
+  client sache quelle méthode utiliser avant même de demander l'accès au
+  micro.
+- `VoiceRecorder` (`src/components/coach/VoiceRecorder.tsx`) réécrit pour
+  suivre l'ordre de préférence du brief (§5.7) : enregistrement navigateur +
+  transcription serveur en priorité quand configuré (`MediaRecorder` +
+  `getUserMedia`), repli sur la Web Speech API du navigateur si non
+  configuré ou non disponible, champ texte toujours disponible en dernier
+  recours. Gère explicitement le refus de micro, une durée maximale
+  d'enregistrement (30s), l'annulation en cours d'enregistrement, et
+  n'affiche jamais d'erreur bloquante — chaque échec retombe sur la méthode
+  suivante ou sur le texte.
+- Lecture vocale du coach et lecture ralentie déjà livrées en Phase 1
+  (`src/lib/speech-synthesis.ts`, réglage `Lecture ralentie` dans
+  `/settings`) — inchangées, aucun travail supplémentaire nécessaire.
+- Métrique vocale : `ConversationTurn.transcriptionConfidence` (déjà présent
+  dans le domaine mais jamais alimenté avant cette phase) est maintenant
+  rempli de bout en bout — `VoiceRecorder` → `handleSend` →
+  `submitUserTurn` — avec la confiance renvoyée par la Web Speech API
+  nativement, ou une heuristique dérivée des `avg_logprob` des segments
+  Whisper (`estimateConfidence`, `src/ai/transcription-confidence.ts`,
+  testée unitairement ; Whisper ne renvoie pas de score de confiance
+  direct).
+- Stockage de l'audio brut : jamais implémenté, conforme au brief (« store
+  transcript and learning signals, not raw audio » par défaut) — le blob
+  audio n'existe que le temps de la requête vers la route de transcription
+  et n'est jamais persisté (ni `localStorage`, ni Supabase).
+
+**Non fait délibérément** : l'API Realtime d'OpenAI (streaming bidirectionnel
+à faible latence, citée comme « preferred production path » plutôt que MVP
+dans le brief) n'a pas été implémentée — le round-trip enregistrement →
+transcription reste plus simple et suffit au critère de sortie de cette
+phase. Piste d'amélioration future si la latence perçue devient un problème.
 
 ### Phase 5 — Intelligence d'apprentissage
 
