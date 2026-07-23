@@ -1,7 +1,7 @@
 import "server-only";
 import { COACH_SYSTEM_PROMPT } from "../prompts/coach-system-prompt";
 import type { CoachContext, CoachProvider } from "../coach-provider";
-import { CoachTurnSchema, type CoachTurn } from "../schemas";
+import { CORRECTION_CATEGORIES, CoachTurnSchema, type CoachTurn } from "../schemas";
 
 // OpenAI's Structured Outputs (`strict: true`) require every key in
 // `properties` to also appear in `required` — there is no separate concept
@@ -32,11 +32,12 @@ const COACH_TURN_JSON_SCHEMA = {
       correction: {
         type: ["object", "null"],
         additionalProperties: false,
-        required: ["original", "improved", "explanationFr"],
+        required: ["original", "improved", "explanationFr", "category"],
         properties: {
           original: { type: "string" },
           improved: { type: "string" },
           explanationFr: { type: "string" },
+          category: { type: "string", enum: CORRECTION_CATEGORIES },
         },
       },
       detectedSignals: {

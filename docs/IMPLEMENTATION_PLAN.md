@@ -238,9 +238,55 @@ phase. Piste d'amélioration future si la latence perçue devient un problème.
 
 ### Phase 5 — Intelligence d'apprentissage
 
-Mémoire utilisateur, corrections sélectives basées sur l'historique réel,
-détection de plateau — nécessite des données de sessions réelles
-(post-Phase 2/3).
+Code livré et testé (typecheck/lint/build/unit/e2e tous verts, vérifié
+visuellement dans un vrai navigateur). Déjà en place avant cette phase :
+mise à jour des capacités et du signal de confiance à la fin de chaque
+mission, analyse de débrief, recommandation de mission suivante — cette
+phase ajoute les trois éléments qui manquaient (ODYSSEY_MASTER_PROMPT_CODEX.md
+§ Phase 5 : « selective corrections », « basic memory ») :
+
+- **Corrections sélectives basées sur l'historique réel** : chaque
+  correction réellement produite par le coach OpenAI (`CoachTurn.correction`)
+  porte désormais une `category` (vocabulaire contrôlé : temps verbal,
+  préposition, ordre des mots, article, accord sujet-verbe, vocabulaire,
+  autre — `src/ai/schemas.ts`, `CORRECTION_CATEGORIES`, partagé avec le
+  schéma JSON strict envoyé à OpenAI pour ne jamais diverger). Après chaque
+  tour corrigé, `upsertRecurringError` (`src/domain/recurring-errors.ts`,
+  testé) incrémente ou crée l'entrée correspondante dans
+  `user.recurringErrors`. Le prompt système du coach
+  (`src/ai/prompts/coach-system-prompt.ts`) relit ensuite les patterns actifs
+  les plus fréquents et demande explicitement au coach de les surveiller en
+  priorité plutôt que de corriger au hasard — un vrai bouclage sur des
+  données de session réelles, pas une simulation.
+- **Détection de plateau** (`detectPlateau`, `src/domain/decision-engine.ts`,
+  testé) : combine trois signaux indépendants du
+  `docs/brain/decision-engine.md` — même erreur active répétée
+  (`count >= 3`), capacité qui ne progresse plus malgré ≥ 4 tentatives, et
+  engagement en baisse (nombre de mots appris sur les sessions récentes vs
+  plus anciennes). `recommendMission` applique une pénalité de score aux
+  missions dont la capacité cible est en plateau, biaisant naturellement la
+  recommandation vers un contexte différent (« changer le contexte / le
+  scénario », comme demandé par le brief) sans jamais exclure totalement une
+  mission s'il n'y a pas de meilleure alternative. La raison de la
+  recommandation (déjà calculée mais jamais affichée) est désormais visible
+  sous la mission du jour dans l'UI (`MissionCard`), rendant la
+  personnalisation observable plutôt que silencieuse.
+- **Mémoire de base** (`user.memories`) : jusqu'ici alimentée par aucune
+  écriture réelle malgré la politique `evaluateMemoryCandidate`
+  (`src/domain/memory-policy.ts`) déjà présente et testée depuis la Phase 1.
+  À la fin d'une mission où l'apprenant a effectivement utilisé un
+  mot-clé de réussite attendu (signal déterministe déjà calculé par
+  `computeSessionDebrief`, exposé via le nouveau champ
+  `SessionDebrief.usedSuccessKeyword`), une mémoire
+  `successful_formulation` est créée via la politique existante — donc
+  jamais fabriquée, toujours dérivée d'un fait vérifiable de la session.
+  Plafonnée à 30 entrées pour éviter une croissance illimitée.
+
+Critère de sortie du brief (« Two users with different performance receive
+meaningfully different follow-ups ») : vérifié par test unitaire — deux
+profils utilisateur avec des historiques différents (un avec une erreur
+récurrente active, l'autre sans) reçoivent des raisons de recommandation
+différentes.
 
 ### Phase 6 — Durcissement produit
 

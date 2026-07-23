@@ -183,6 +183,7 @@ describe("state -> row mappers", () => {
             learnerWordCount: 5,
             scoreDelta: 5,
             recommendedNextMissionId: null,
+            usedSuccessKeyword: true,
           },
         },
       ],

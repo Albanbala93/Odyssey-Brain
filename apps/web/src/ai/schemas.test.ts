@@ -24,6 +24,7 @@ describe("CoachTurnSchema", () => {
         original: "I go yesterday",
         improved: "I went yesterday",
         explanationFr: "Passé simple.",
+        category: "verb_tense",
       },
       detectedSignals: { hesitation: 0.3, confidence: 0.6, comprehensionRisk: 0.2 },
     });

@@ -6,6 +6,8 @@ import { CoachTurnResponseSchema, type CoachTurn, type CoachTurnResponse } from 
 import { decideCorrectionPolicy, recommendMission } from "@/domain/decision-engine";
 import { updateCapabilityProgress } from "@/domain/capability";
 import { computeSessionDebrief } from "@/domain/debrief";
+import { evaluateMemoryCandidate } from "@/domain/memory-policy";
+import { upsertRecurringError } from "@/domain/recurring-errors";
 import { getCapabilityBySlug } from "@/domain/capabilities-catalog";
 import { getMissionById, MISSIONS } from "@/domain/missions";
 import type {
@@ -14,6 +16,7 @@ import type {
   OdysseyState,
   Session,
   TranslationMode,
+  UserMemory,
   UserModel,
 } from "@/domain/types";
 import {
@@ -40,6 +43,9 @@ import { SupabaseStateRepository } from "./supabase/state-repository";
 
 const localStorageRepository = new LocalStorageStateRepository();
 const localCoachProvider = new LocalCoachProvider();
+// Safety cap so memories (Phase 5 "basic memory") can't grow unbounded
+// across a long-lived account; oldest entries are dropped first.
+const MAX_MEMORIES = 30;
 
 function createInitialState(): OdysseyState {
   return { schemaVersion: STATE_SCHEMA_VERSION, user: createGuestUserModel(), sessions: [] };
@@ -65,6 +71,7 @@ async function requestCoachTurn(context: CoachContext): Promise<CoachTurnRespons
         learnerName: context.user.identity.name,
         translationMode: context.user.preferences.translationMode,
         confidenceGlobal: context.user.confidence.global,
+        recurringErrors: context.user.recurringErrors,
       }),
     });
     if (!response.ok) throw new Error(`coach/turn responded with ${response.status}`);
@@ -193,14 +200,14 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const recommendedMission = useCallback(() => {
-    return recommendMission(stateRef.current.user, MISSIONS);
+    return recommendMission(stateRef.current.user, MISSIONS, undefined, stateRef.current.sessions);
   }, []);
 
   const startMission = useCallback(async (missionId?: string) => {
     const currentUser = stateRef.current.user;
     const mission = missionId
       ? getMissionById(missionId)
-      : recommendMission(currentUser, MISSIONS).mission;
+      : recommendMission(currentUser, MISSIONS, undefined, stateRef.current.sessions).mission;
     if (!mission) throw new Error(`Unknown mission: ${missionId}`);
 
     const correctionPolicy = decideCorrectionPolicy(currentUser.confidence.global);
@@ -309,18 +316,34 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         createdAt: new Date().toISOString(),
       };
 
-      setState((prev) => ({
-        ...prev,
-        sessions: prev.sessions.map((s) =>
-          s.id === sessionId
-            ? {
-                ...s,
-                turns: [...s.turns, coachTurn],
-                coachWordCount: s.coachWordCount + countWords(nextTurn.english),
-              }
-            : s,
-        ),
-      }));
+      setState((prev) => {
+        // Phase 5 "corrections sélectives": a real correction from the coach
+        // is the only reliable, non-fabricated signal we have for what the
+        // learner actually struggles with — track it so future sessions
+        // (this one included, via the system prompt) can watch for the same
+        // pattern instead of correcting generically every time.
+        const recurringErrors = nextTurn.correction
+          ? upsertRecurringError(prev.user.recurringErrors, {
+              category: nextTurn.correction.category,
+              pattern: nextTurn.correction.explanationFr,
+              example: `${nextTurn.correction.original} → ${nextTurn.correction.improved}`,
+            })
+          : prev.user.recurringErrors;
+
+        return {
+          ...prev,
+          user: { ...prev.user, recurringErrors },
+          sessions: prev.sessions.map((s) =>
+            s.id === sessionId
+              ? {
+                  ...s,
+                  turns: [...s.turns, coachTurn],
+                  coachWordCount: s.coachWordCount + countWords(nextTurn.english),
+                }
+              : s,
+          ),
+        };
+      });
     },
     [],
   );
@@ -336,7 +359,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     const userTurns = session.turns.filter((t) => t.role === "user").map((t) => t.englishText);
     const otherMissions = MISSIONS.filter((m) => m.id !== mission.id);
     const next =
-      otherMissions.length > 0 ? recommendMission(currentState.user, otherMissions) : null;
+      otherMissions.length > 0
+        ? recommendMission(currentState.user, otherMissions, undefined, currentState.sessions)
+        : null;
 
     const debrief = computeSessionDebrief({
       mission,
@@ -363,11 +388,38 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
       const confidenceGain = userTurns.length >= 2 ? 0.03 : 0.01;
 
+      // Phase 5 "basic memory": the only fact about this session we can
+      // assert without fabricating anything is whether the learner actually
+      // used one of the mission's expected success keywords — a real,
+      // deterministic signal (debrief.ts), not an AI guess.
+      let memories = prev.user.memories;
+      if (debrief.usedSuccessKeyword) {
+        const decision = evaluateMemoryCandidate({
+          category: "successful_formulation",
+          content: `A réussi « ${mission.titleFr} » en utilisant une formulation attendue.`,
+          source: "observed",
+          confidence: 0.6,
+        });
+        if (decision.retain) {
+          const newMemory: UserMemory = {
+            id: createId(),
+            category: "successful_formulation",
+            content: `A réussi « ${mission.titleFr} » en utilisant une formulation attendue.`,
+            source: "observed",
+            confidence: 0.6,
+            createdAt: now.toISOString(),
+            expiresAt: decision.expiresAt,
+          };
+          memories = [...memories, newMemory].slice(-MAX_MEMORIES);
+        }
+      }
+
       return {
         ...prev,
         user: {
           ...prev.user,
           capabilities,
+          memories,
           confidence: {
             ...prev.user.confidence,
             global: Math.min(1, prev.user.confidence.global + confidenceGain),

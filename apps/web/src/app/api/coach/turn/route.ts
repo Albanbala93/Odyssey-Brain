@@ -27,6 +27,23 @@ const RequestSchema = z.object({
   learnerName: z.string().max(80).optional(),
   translationMode: z.enum(["always", "adaptive", "on_demand"]).default("adaptive"),
   confidenceGlobal: z.number().min(0).max(1).default(0.5),
+  // Phase 5 "corrections sélectives": the client's own recurring-error
+  // history, so the coach can prioritize watching for known patterns
+  // instead of correcting generically (see coach-system-prompt.ts).
+  recurringErrors: z
+    .array(
+      z.object({
+        id: z.string(),
+        category: z.string(),
+        pattern: z.string(),
+        example: z.string(),
+        count: z.number().int().min(0),
+        status: z.enum(["active", "resolved"]),
+        lastSeenAt: z.string(),
+      }),
+    )
+    .max(20)
+    .default([]),
 });
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -47,6 +64,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   user.identity.name = parsedBody.learnerName;
   user.preferences.translationMode = parsedBody.translationMode;
   user.confidence.global = parsedBody.confidenceGlobal;
+  user.recurringErrors = parsedBody.recurringErrors;
 
   const context: CoachContext = {
     user,
