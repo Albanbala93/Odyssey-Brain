@@ -1,6 +1,26 @@
 import { z } from "zod";
 
 /**
+ * Controlled vocabulary for what kind of mistake a correction addresses.
+ * Shared with the OpenAI provider's raw JSON schema (which can't import
+ * Zod's enum shape directly) so the two never drift apart — Phase 5 groups
+ * corrections by this category to track recurring patterns across sessions
+ * (src/lib/app-state.tsx, ODYSSEY_MASTER_PROMPT_CODEX.md §5.9 "corrections
+ * sélectives").
+ */
+export const CORRECTION_CATEGORIES = [
+  "verb_tense",
+  "preposition",
+  "word_order",
+  "article",
+  "subject_verb_agreement",
+  "vocabulary",
+  "other",
+] as const;
+
+export type CorrectionCategory = (typeof CORRECTION_CATEGORIES)[number];
+
+/**
  * Structured coach output contract (ODYSSEY_MASTER_PROMPT_CODEX.md §5.8).
  * Every AI-generated turn shown to the user — whether from the local
  * deterministic fallback or a future OpenAI-backed provider — must validate
@@ -22,6 +42,7 @@ export const CoachTurnSchema = z.object({
       original: z.string(),
       improved: z.string(),
       explanationFr: z.string(),
+      category: z.enum(CORRECTION_CATEGORIES),
     })
     .nullish()
     .transform((v) => v ?? undefined),

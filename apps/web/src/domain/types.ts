@@ -206,6 +206,8 @@ export interface SessionDebrief {
   learnerWordCount: number;
   scoreDelta: number; // percentage points added to the capability
   recommendedNextMissionId: string | null;
+  /** Whether the learner used one of the mission's expected success keywords — feeds Phase 5's basic memory (successful_formulation). */
+  usedSuccessKeyword: boolean;
 }
 
 export interface Session {

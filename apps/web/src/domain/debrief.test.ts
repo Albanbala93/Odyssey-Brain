@@ -32,6 +32,22 @@ describe("computeSessionDebrief", () => {
     expect(debrief.recommendedNextMissionId).toBe("mission-give-opinion");
   });
 
+  it("reports whether the learner used a success keyword", () => {
+    const withKeyword = computeSessionDebrief({
+      mission,
+      userTurns: ["We propose a new loyalty idea"],
+      recommendedNextMissionId: null,
+    });
+    expect(withKeyword.usedSuccessKeyword).toBe(true);
+
+    const withoutKeyword = computeSessionDebrief({
+      mission,
+      userTurns: ["Hello there, nice to meet you"],
+      recommendedNextMissionId: null,
+    });
+    expect(withoutKeyword.usedSuccessKeyword).toBe(false);
+  });
+
   it("always returns the mission's target capability as the debrief capability", () => {
     const debrief = computeSessionDebrief({
       mission,

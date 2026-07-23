@@ -49,5 +49,6 @@ export function computeSessionDebrief(params: {
     learnerWordCount,
     scoreDelta: computeScoreDelta({ turnsCompleted, usedSuccessKeyword }),
     recommendedNextMissionId,
+    usedSuccessKeyword,
   };
 }

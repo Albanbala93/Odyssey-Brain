@@ -4,10 +4,13 @@ import {
   decideDifficulty,
   decideSupportLevel,
   detectOverload,
+  detectPlateau,
   recommendMission,
 } from "./decision-engine";
+import { getCapabilityBySlug } from "./capabilities-catalog";
 import { MISSIONS } from "./missions";
 import { createGuestUserModel } from "./user-model";
+import type { RecurringError, Session } from "./types";
 
 describe("recommendMission", () => {
   it("prefers a mission matching the user's context over an unrelated one", () => {
@@ -37,6 +40,157 @@ describe("recommendMission", () => {
   it("throws when there are no active missions", () => {
     const user = createGuestUserModel();
     expect(() => recommendMission(user, [])).toThrow();
+  });
+
+  it("avoids recommending a mission whose capability has plateaued, in favor of a different one", () => {
+    const user = createGuestUserModel();
+    const interviewMission = MISSIONS.find((m) => m.contextType === "interviews")!;
+    user.contexts = [{ id: "ctx-1", type: "interviews", label: "Interviews" }];
+    const capabilityId = getCapabilityBySlug(interviewMission.targetCapabilitySlug)!.id;
+    const capability = user.capabilities.find((c) => c.capabilityId === capabilityId)!;
+    capability.status = "in_progress";
+    capability.attemptCount = 5; // practiced a lot but never advanced past in_progress
+
+    const { mission } = recommendMission(user, MISSIONS);
+
+    expect(mission.id).not.toBe(interviewMission.id);
+  });
+
+  it("names the plateau in the reason when no better alternative exists", () => {
+    const user = createGuestUserModel();
+    const interviewMission = MISSIONS.find((m) => m.contextType === "interviews")!;
+    const capabilityId = getCapabilityBySlug(interviewMission.targetCapabilitySlug)!.id;
+    const capability = user.capabilities.find((c) => c.capabilityId === capabilityId)!;
+    capability.status = "in_progress";
+    capability.attemptCount = 5;
+
+    const { reason } = recommendMission(user, [interviewMission]);
+
+    expect(reason).toContain("stagne");
+  });
+
+  it("two users with different histories receive different recommendations", () => {
+    const thriving = createGuestUserModel();
+    const struggling = createGuestUserModel();
+    struggling.recurringErrors = [
+      {
+        id: "err-1",
+        category: "verb_tense",
+        pattern: "past tense",
+        example: "I go yesterday -> I went yesterday",
+        count: 4,
+        status: "active",
+        lastSeenAt: new Date().toISOString(),
+      },
+    ];
+
+    const thrivingPick = recommendMission(thriving, MISSIONS);
+    const strugglingPick = recommendMission(struggling, MISSIONS);
+
+    // Same starting state otherwise, but the struggling learner's history
+    // changes the explanation given for the recommendation.
+    expect(strugglingPick.reason).not.toBe(thrivingPick.reason);
+  });
+});
+
+describe("detectPlateau", () => {
+  const activeError: RecurringError = {
+    id: "err-1",
+    category: "verb_tense",
+    pattern: "past tense",
+    example: "I go yesterday -> I went yesterday",
+    count: 3,
+    status: "active",
+    lastSeenAt: new Date().toISOString(),
+  };
+
+  function makeSession(learnerWordCount: number, daysAgo: number): Session {
+    const startedAt = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000).toISOString();
+    return {
+      id: `session-${daysAgo}`,
+      userId: "user-1",
+      missionId: "mission-1",
+      status: "completed",
+      startedAt,
+      completedAt: startedAt,
+      durationSeconds: 60,
+      turns: [],
+      learnerWordCount,
+      coachWordCount: 20,
+      translationUsageCount: 0,
+      debrief: null,
+    };
+  }
+
+  it("is false with no signals", () => {
+    expect(detectPlateau({ recurringErrors: [], sessions: [] }).isPlateaued).toBe(false);
+  });
+
+  it("detects a repeated error at or above the count threshold", () => {
+    const signal = detectPlateau({ recurringErrors: [activeError], sessions: [] });
+    expect(signal.isPlateaued).toBe(true);
+    expect(signal.reasons).toContain("repeated_error");
+  });
+
+  it("ignores a resolved recurring error", () => {
+    const signal = detectPlateau({
+      recurringErrors: [{ ...activeError, status: "resolved" }],
+      sessions: [],
+    });
+    expect(signal.isPlateaued).toBe(false);
+  });
+
+  it("detects capability stagnation after many attempts without advancing", () => {
+    const signal = detectPlateau({
+      capability: {
+        capabilityId: "cap-1",
+        status: "in_progress",
+        confidenceScore: 40,
+        demonstratedScore: 40,
+        attemptCount: 6,
+        lastPracticedAt: null,
+        trend: "flat",
+        evidence: [],
+      },
+      recurringErrors: [],
+      sessions: [],
+    });
+    expect(signal.reasons).toContain("capability_stagnation");
+  });
+
+  it("does not flag stagnation for a capability that has become solid", () => {
+    const signal = detectPlateau({
+      capability: {
+        capabilityId: "cap-1",
+        status: "solid",
+        confidenceScore: 80,
+        demonstratedScore: 80,
+        attemptCount: 6,
+        lastPracticedAt: null,
+        trend: "flat",
+        evidence: [],
+      },
+      recurringErrors: [],
+      sessions: [],
+    });
+    expect(signal.reasons).not.toContain("capability_stagnation");
+  });
+
+  it("detects declining engagement across enough completed sessions", () => {
+    const sessions = [
+      makeSession(80, 8),
+      makeSession(75, 6),
+      makeSession(20, 4),
+      makeSession(15, 2),
+    ];
+    const signal = detectPlateau({ recurringErrors: [], sessions });
+    expect(signal.reasons).toContain("declining_engagement");
+  });
+
+  it("does not flag engagement decline with too few sessions to judge", () => {
+    const sessions = [makeSession(80, 2), makeSession(10, 1)];
+    const signal = detectPlateau({ recurringErrors: [], sessions });
+    expect(signal.reasons).not.toContain("declining_engagement");
   });
 });
 
