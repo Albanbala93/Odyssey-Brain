@@ -6,8 +6,14 @@ import type { CoachContext } from "@/ai/coach-provider";
 import { CoachTurnResponseSchema } from "@/ai/schemas";
 import { getMissionById } from "@/domain/missions";
 import { createGuestUserModel } from "@/domain/user-model";
+import { checkRateLimit, getClientKey } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
+
+// Generous for a real conversation (a mission is ~4-6 turns) while still
+// bounding the cost/abuse surface of the only route that can call OpenAI's
+// paid chat API. See lib/rate-limit.ts for this limiter's real scope.
+const MAX_REQUESTS_PER_MINUTE = 30;
 
 /**
  * Server-side coach turn generation (ODYSSEY_MASTER_PROMPT_CODEX.md §5.8,
@@ -27,9 +33,30 @@ const RequestSchema = z.object({
   learnerName: z.string().max(80).optional(),
   translationMode: z.enum(["always", "adaptive", "on_demand"]).default("adaptive"),
   confidenceGlobal: z.number().min(0).max(1).default(0.5),
+  // Phase 5 "corrections sélectives": the client's own recurring-error
+  // history, so the coach can prioritize watching for known patterns
+  // instead of correcting generically (see coach-system-prompt.ts).
+  recurringErrors: z
+    .array(
+      z.object({
+        id: z.string(),
+        category: z.string(),
+        pattern: z.string(),
+        example: z.string(),
+        count: z.number().int().min(0),
+        status: z.enum(["active", "resolved"]),
+        lastSeenAt: z.string(),
+      }),
+    )
+    .max(20)
+    .default([]),
 });
 
 export async function POST(request: Request): Promise<NextResponse> {
+  if (!checkRateLimit(getClientKey(request), MAX_REQUESTS_PER_MINUTE)) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   let parsedBody: z.infer<typeof RequestSchema>;
   try {
     const json = await request.json();
@@ -47,6 +74,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   user.identity.name = parsedBody.learnerName;
   user.preferences.translationMode = parsedBody.translationMode;
   user.confidence.global = parsedBody.confidenceGlobal;
+  user.recurringErrors = parsedBody.recurringErrors;
 
   const context: CoachContext = {
     user,

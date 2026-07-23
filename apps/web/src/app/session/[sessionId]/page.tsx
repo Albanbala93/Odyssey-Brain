@@ -65,12 +65,12 @@ export default function SessionPage() {
   const totalExpectedTurns = mission.scriptedTurns.length + 1;
   const coachTurnsSoFar = session.turns.filter((t) => t.role === "coach").length;
 
-  async function handleSend(text: string) {
+  async function handleSend(text: string, transcriptionConfidence?: number) {
     if (!text.trim() || isSending || session!.status !== "in_progress") return;
     setIsSending(true);
     setError(null);
     try {
-      await submitUserTurn(sessionId, text);
+      await submitUserTurn(sessionId, text, transcriptionConfidence);
       setDraft("");
     } catch {
       setError("La réponse du coach n'a pas pu être générée. Réessaie.");
@@ -139,6 +139,7 @@ export default function SessionPage() {
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSend(draft)}
                 placeholder="Ou écris ta réponse…"
+                aria-label="Ta réponse"
                 disabled={isSending}
                 className="border-border bg-surface flex-1 rounded-2xl border px-4 py-3 text-base"
               />

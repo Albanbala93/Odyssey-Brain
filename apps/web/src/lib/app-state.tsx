@@ -6,6 +6,8 @@ import { CoachTurnResponseSchema, type CoachTurn, type CoachTurnResponse } from 
 import { decideCorrectionPolicy, recommendMission } from "@/domain/decision-engine";
 import { updateCapabilityProgress } from "@/domain/capability";
 import { computeSessionDebrief } from "@/domain/debrief";
+import { evaluateMemoryCandidate } from "@/domain/memory-policy";
+import { upsertRecurringError } from "@/domain/recurring-errors";
 import { getCapabilityBySlug } from "@/domain/capabilities-catalog";
 import { getMissionById, MISSIONS } from "@/domain/missions";
 import type {
@@ -14,6 +16,7 @@ import type {
   OdysseyState,
   Session,
   TranslationMode,
+  UserMemory,
   UserModel,
 } from "@/domain/types";
 import {
@@ -23,6 +26,7 @@ import {
 } from "@/domain/user-model";
 import { useAuth } from "@/lib/auth/auth-context";
 import { createId } from "@/lib/id";
+import { trackEvent } from "@/lib/analytics";
 import { countWords } from "@/lib/text";
 import {
   createContext,
@@ -40,6 +44,9 @@ import { SupabaseStateRepository } from "./supabase/state-repository";
 
 const localStorageRepository = new LocalStorageStateRepository();
 const localCoachProvider = new LocalCoachProvider();
+// Safety cap so memories (Phase 5 "basic memory") can't grow unbounded
+// across a long-lived account; oldest entries are dropped first.
+const MAX_MEMORIES = 30;
 
 function createInitialState(): OdysseyState {
   return { schemaVersion: STATE_SCHEMA_VERSION, user: createGuestUserModel(), sessions: [] };
@@ -65,6 +72,7 @@ async function requestCoachTurn(context: CoachContext): Promise<CoachTurnRespons
         learnerName: context.user.identity.name,
         translationMode: context.user.preferences.translationMode,
         confidenceGlobal: context.user.confidence.global,
+        recurringErrors: context.user.recurringErrors,
       }),
     });
     if (!response.ok) throw new Error(`coach/turn responded with ${response.status}`);
@@ -81,10 +89,16 @@ interface AppStateValue {
   isReady: boolean;
   completeOnboarding: (answers: OnboardingAnswers) => void;
   startMission: (missionId?: string) => Promise<string>;
-  submitUserTurn: (sessionId: string, text: string) => Promise<void>;
+  submitUserTurn: (
+    sessionId: string,
+    text: string,
+    transcriptionConfidence?: number,
+  ) => Promise<void>;
   finishSession: (sessionId: string) => void;
   recordTranslationToggle: (sessionId: string, visible: boolean) => void;
   updatePreferences: (partial: Partial<UserModel["preferences"]>) => void;
+  updateConsent: (partial: Partial<Omit<UserModel["consent"], "version" | "updatedAt">>) => void;
+  deleteMemory: (memoryId: string) => void;
   resetProfile: () => void;
   deleteAccount: () => Promise<void>;
   getSession: (sessionId: string) => Session | undefined;
@@ -123,25 +137,44 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     async function hydrate() {
-      const loaded = await repository.load();
+      let loaded: OdysseyState | null = null;
+      let loadFailed = false;
+      try {
+        loaded = await repository.load();
+      } catch (error) {
+        // A real query error (network, RLS, etc.) is not the same as "no
+        // profile exists yet" — treating it as the latter would re-run the
+        // guest-to-account migration below against an account that already
+        // has one, minting a new id that collides with existing foreign
+        // keys. Leave the current state untouched and let the user retry.
+        console.error("[app-state] failed to load account state", error);
+        loadFailed = true;
+      }
       if (cancelled) return;
 
       if (loaded) {
         setState(loaded);
-      } else if (user) {
+      } else if (user && !loadFailed) {
         // Authenticated but no account data yet (first sign-in): migrate
         // whatever guest/local progress exists into the new account
-        // (ODYSSEY_MASTER_PROMPT_CODEX.md §5.1 guest upgrade path).
+        // (ODYSSEY_MASTER_PROMPT_CODEX.md §5.1 guest upgrade path). A fresh
+        // id is minted for the account rather than reusing the local guest
+        // one, since the two identities are conceptually distinct.
         const guestState = (await localStorageRepository.load()) ?? stateRef.current;
+        const newUserId = createId();
         const migrated: OdysseyState = {
           ...guestState,
           user: {
             ...guestState.user,
-            identity: { ...guestState.user.identity, isGuest: false },
+            identity: { ...guestState.user.identity, id: newUserId, isGuest: false },
           },
+          sessions: guestState.sessions.map((s) => ({ ...s, userId: newUserId })),
         };
         await repository.save(migrated);
         if (!cancelled) setState(migrated);
+        trackEvent("account_created", migrated.user.consent.analytics, {
+          sessionsCarriedOver: migrated.sessions.length,
+        });
       }
 
       if (!cancelled) setIsReady(true);
@@ -172,15 +205,41 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  // Phase 6 privacy control: consent was previously read-only in the UI —
+  // this is the only place `UserModel.consent` is ever mutated by the user
+  // themselves (ODYSSEY_MASTER_PROMPT_CODEX.md §10, docs/PRIVACY_MODEL.md).
+  const updateConsent = useCallback(
+    (partial: Partial<Omit<UserModel["consent"], "version" | "updatedAt">>) => {
+      setState((prev) => ({
+        ...prev,
+        user: {
+          ...prev.user,
+          consent: { ...prev.user.consent, ...partial, updatedAt: new Date().toISOString() },
+        },
+      }));
+    },
+    [],
+  );
+
+  const deleteMemory = useCallback((memoryId: string) => {
+    setState((prev) => ({
+      ...prev,
+      user: {
+        ...prev.user,
+        memories: prev.user.memories.filter((m) => m.id !== memoryId),
+      },
+    }));
+  }, []);
+
   const recommendedMission = useCallback(() => {
-    return recommendMission(stateRef.current.user, MISSIONS);
+    return recommendMission(stateRef.current.user, MISSIONS, undefined, stateRef.current.sessions);
   }, []);
 
   const startMission = useCallback(async (missionId?: string) => {
     const currentUser = stateRef.current.user;
     const mission = missionId
       ? getMissionById(missionId)
-      : recommendMission(currentUser, MISSIONS).mission;
+      : recommendMission(currentUser, MISSIONS, undefined, stateRef.current.sessions).mission;
     if (!mission) throw new Error(`Unknown mission: ${missionId}`);
 
     const correctionPolicy = decideCorrectionPolicy(currentUser.confidence.global);
@@ -194,9 +253,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       correctionPolicy,
     });
 
-    const sessionId = createId("session");
+    const sessionId = createId();
     const coachTurn: ConversationTurn = {
-      id: createId("turn"),
+      id: createId(),
       turnIndex: 0,
       role: "coach",
       englishText: openingTurn.english,
@@ -222,68 +281,108 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     };
 
     setState((prev) => ({ ...prev, sessions: [...prev.sessions, session] }));
+    trackEvent("session_started", currentUser.consent.analytics, {
+      missionId: mission.id,
+      contextType: mission.contextType,
+    });
     return sessionId;
   }, []);
 
-  const submitUserTurn = useCallback(async (sessionId: string, text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
+  const submitUserTurn = useCallback(
+    async (sessionId: string, text: string, transcriptionConfidence?: number) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
 
-    const currentState = stateRef.current;
-    const session = currentState.sessions.find((s) => s.id === sessionId);
-    if (!session || session.status !== "in_progress") return;
-    const mission = getMissionById(session.missionId);
-    if (!mission) return;
+      const currentState = stateRef.current;
+      const session = currentState.sessions.find((s) => s.id === sessionId);
+      if (!session || session.status !== "in_progress") return;
+      const mission = getMissionById(session.missionId);
+      if (!mission) return;
 
-    const correctionPolicy = decideCorrectionPolicy(currentState.user.confidence.global);
-    const coachTurnCount = session.turns.filter((t) => t.role === "coach").length;
+      const correctionPolicy = decideCorrectionPolicy(currentState.user.confidence.global);
+      const coachTurnCount = session.turns.filter((t) => t.role === "coach").length;
 
-    const userTurn: ConversationTurn = {
-      id: createId("turn"),
-      turnIndex: session.turns.length,
-      role: "user",
-      englishText: trimmed,
-      createdAt: new Date().toISOString(),
-    };
+      const userTurn: ConversationTurn = {
+        id: createId(),
+        turnIndex: session.turns.length,
+        role: "user",
+        englishText: trimmed,
+        transcriptionConfidence,
+        createdAt: new Date().toISOString(),
+      };
 
-    const history = [...session.turns, userTurn].map((t) => ({
-      role: t.role,
-      text: t.englishText,
-    }));
+      const history = [...session.turns, userTurn].map((t) => ({
+        role: t.role,
+        text: t.englishText,
+      }));
 
-    const { turn: nextTurn, source } = await requestCoachTurn({
-      user: currentState.user,
-      mission,
-      turnIndex: coachTurnCount,
-      history,
-      correctionPolicy,
-    });
+      // Show the learner's own message as soon as they send it, rather than
+      // holding it back until the coach's reply arrives — the round trip to
+      // the AI provider can take a couple of seconds, and bundling both turns
+      // into one update made the UI look unresponsive until it resolved.
+      setState((prev) => ({
+        ...prev,
+        sessions: prev.sessions.map((s) =>
+          s.id === sessionId
+            ? {
+                ...s,
+                turns: [...s.turns, userTurn],
+                learnerWordCount: s.learnerWordCount + countWords(trimmed),
+              }
+            : s,
+        ),
+      }));
 
-    const coachTurn: ConversationTurn = {
-      id: createId("turn"),
-      turnIndex: userTurn.turnIndex + 1,
-      role: "coach",
-      englishText: nextTurn.english,
-      frenchText: nextTurn.french,
-      comprehensionRisk: nextTurn.detectedSignals?.comprehensionRisk,
-      source,
-      createdAt: new Date().toISOString(),
-    };
+      const { turn: nextTurn, source } = await requestCoachTurn({
+        user: currentState.user,
+        mission,
+        turnIndex: coachTurnCount,
+        history,
+        correctionPolicy,
+      });
 
-    setState((prev) => ({
-      ...prev,
-      sessions: prev.sessions.map((s) =>
-        s.id === sessionId
-          ? {
-              ...s,
-              turns: [...s.turns, userTurn, coachTurn],
-              learnerWordCount: s.learnerWordCount + countWords(trimmed),
-              coachWordCount: s.coachWordCount + countWords(nextTurn.english),
-            }
-          : s,
-      ),
-    }));
-  }, []);
+      const coachTurn: ConversationTurn = {
+        id: createId(),
+        turnIndex: userTurn.turnIndex + 1,
+        role: "coach",
+        englishText: nextTurn.english,
+        frenchText: nextTurn.french,
+        comprehensionRisk: nextTurn.detectedSignals?.comprehensionRisk,
+        source,
+        createdAt: new Date().toISOString(),
+      };
+
+      setState((prev) => {
+        // Phase 5 "corrections sélectives": a real correction from the coach
+        // is the only reliable, non-fabricated signal we have for what the
+        // learner actually struggles with — track it so future sessions
+        // (this one included, via the system prompt) can watch for the same
+        // pattern instead of correcting generically every time.
+        const recurringErrors = nextTurn.correction
+          ? upsertRecurringError(prev.user.recurringErrors, {
+              category: nextTurn.correction.category,
+              pattern: nextTurn.correction.explanationFr,
+              example: `${nextTurn.correction.original} → ${nextTurn.correction.improved}`,
+            })
+          : prev.user.recurringErrors;
+
+        return {
+          ...prev,
+          user: { ...prev.user, recurringErrors },
+          sessions: prev.sessions.map((s) =>
+            s.id === sessionId
+              ? {
+                  ...s,
+                  turns: [...s.turns, coachTurn],
+                  coachWordCount: s.coachWordCount + countWords(nextTurn.english),
+                }
+              : s,
+          ),
+        };
+      });
+    },
+    [],
+  );
 
   const finishSession = useCallback((sessionId: string) => {
     const currentState = stateRef.current;
@@ -296,7 +395,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     const userTurns = session.turns.filter((t) => t.role === "user").map((t) => t.englishText);
     const otherMissions = MISSIONS.filter((m) => m.id !== mission.id);
     const next =
-      otherMissions.length > 0 ? recommendMission(currentState.user, otherMissions) : null;
+      otherMissions.length > 0
+        ? recommendMission(currentState.user, otherMissions, undefined, currentState.sessions)
+        : null;
 
     const debrief = computeSessionDebrief({
       mission,
@@ -323,11 +424,38 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
       const confidenceGain = userTurns.length >= 2 ? 0.03 : 0.01;
 
+      // Phase 5 "basic memory": the only fact about this session we can
+      // assert without fabricating anything is whether the learner actually
+      // used one of the mission's expected success keywords — a real,
+      // deterministic signal (debrief.ts), not an AI guess.
+      let memories = prev.user.memories;
+      if (debrief.usedSuccessKeyword) {
+        const decision = evaluateMemoryCandidate({
+          category: "successful_formulation",
+          content: `A réussi « ${mission.titleFr} » en utilisant une formulation attendue.`,
+          source: "observed",
+          confidence: 0.6,
+        });
+        if (decision.retain) {
+          const newMemory: UserMemory = {
+            id: createId(),
+            category: "successful_formulation",
+            content: `A réussi « ${mission.titleFr} » en utilisant une formulation attendue.`,
+            source: "observed",
+            confidence: 0.6,
+            createdAt: now.toISOString(),
+            expiresAt: decision.expiresAt,
+          };
+          memories = [...memories, newMemory].slice(-MAX_MEMORIES);
+        }
+      }
+
       return {
         ...prev,
         user: {
           ...prev.user,
           capabilities,
+          memories,
           confidence: {
             ...prev.user.confidence,
             global: Math.min(1, prev.user.confidence.global + confidenceGain),
@@ -349,6 +477,11 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
             : s,
         ),
       };
+    });
+    trackEvent("session_completed", currentState.user.consent.analytics, {
+      missionId: mission.id,
+      scoreDelta: debrief.scoreDelta,
+      learnerWordCount: debrief.learnerWordCount,
     });
   }, []);
 
@@ -378,14 +511,27 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setState(createInitialState());
   }, [user, signOut]);
 
-  const getSession = useCallback((sessionId: string) => {
-    return stateRef.current.sessions.find((s) => s.id === sessionId);
-  }, []);
+  // Unlike the action callbacks above (startMission, submitUserTurn…),
+  // these read `state` directly rather than `stateRef.current`: they're
+  // called during render (session/page.tsx reads `getSession(id)` to decide
+  // what to display), and `stateRef.current` is only resynced by an effect
+  // after commit — one render behind. Reading it here meant a just-arrived
+  // coach turn wouldn't show up until some unrelated re-render (e.g. typing
+  // in the reply box) happened to run after the ref had caught up.
+  const getSession = useCallback(
+    (sessionId: string) => {
+      return state.sessions.find((s) => s.id === sessionId);
+    },
+    [state],
+  );
 
-  const getMissionForSession = useCallback((sessionId: string) => {
-    const session = stateRef.current.sessions.find((s) => s.id === sessionId);
-    return session ? getMissionById(session.missionId) : undefined;
-  }, []);
+  const getMissionForSession = useCallback(
+    (sessionId: string) => {
+      const session = state.sessions.find((s) => s.id === sessionId);
+      return session ? getMissionById(session.missionId) : undefined;
+    },
+    [state],
+  );
 
   const value = useMemo<AppStateValue>(
     () => ({
@@ -397,6 +543,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       finishSession,
       recordTranslationToggle,
       updatePreferences,
+      updateConsent,
+      deleteMemory,
       resetProfile,
       deleteAccount,
       getSession,
@@ -412,6 +560,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       finishSession,
       recordTranslationToggle,
       updatePreferences,
+      updateConsent,
+      deleteMemory,
       resetProfile,
       deleteAccount,
       getSession,

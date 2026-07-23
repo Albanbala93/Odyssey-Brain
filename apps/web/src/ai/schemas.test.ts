@@ -24,10 +24,41 @@ describe("CoachTurnSchema", () => {
         original: "I go yesterday",
         improved: "I went yesterday",
         explanationFr: "Passé simple.",
+        category: "verb_tense",
       },
       detectedSignals: { hesitation: 0.3, confidence: 0.6, comprehensionRisk: 0.2 },
     });
     expect(result.success).toBe(true);
+  });
+
+  it("accepts explicit nulls for correction and detected signals (OpenAI strict-mode shape) and normalizes them to undefined", () => {
+    const result = CoachTurnSchema.parse({
+      english: "Good try.",
+      french: "Bien essayé.",
+      intent: "support",
+      difficulty: 1,
+      shouldCorrectNow: false,
+      correction: null,
+      detectedSignals: null,
+    });
+    expect(result.correction).toBeUndefined();
+    expect(result.detectedSignals).toBeUndefined();
+  });
+
+  it("normalizes individually-null detected signal fields to undefined", () => {
+    const result = CoachTurnSchema.parse({
+      english: "Good try.",
+      french: "Bien essayé.",
+      intent: "support",
+      difficulty: 1,
+      shouldCorrectNow: false,
+      detectedSignals: { hesitation: null, confidence: 0.4, comprehensionRisk: null },
+    });
+    expect(result.detectedSignals).toEqual({
+      hesitation: undefined,
+      confidence: 0.4,
+      comprehensionRisk: undefined,
+    });
   });
 
   it("rejects an invalid intent", () => {

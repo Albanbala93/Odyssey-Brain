@@ -123,6 +123,35 @@ direct sans passer par notre code). Contournement documenté et isolé dans
 préservée en amont par les fonctions `mapStateTo*Upsert` (testées), seul le
 re-contrôle au point d'appel `.upsert()` est court-circuité.
 
+**Bugs trouvés et corrigés lors de la vérification live** (tous les 4 avec
+un utilisateur réel, projet Supabase réel) :
+
+- `createId()` préfixait chaque identifiant généré côté app
+  (`session_...`, `turn_...`, `guest_...`, etc.), incompatible avec les
+  colonnes Postgres `uuid` des tables normalisées — toute écriture pour un
+  compte authentifié échouait silencieusement. `createId()` retourne
+  désormais toujours un UUID v4 nu.
+- `SupabaseStateRepository.load()` confondait « aucun profil n'existe
+  encore » (cas normal en première connexion) et « la requête a échoué »
+  (erreur réseau/RLS) — les deux retournaient `null`, ce qui pouvait
+  redéclencher la bascule invité→compte sur un compte déjà existant et
+  casser sa clé primaire (violation de la FK `user_preferences.user_id`).
+  `load()` lève désormais une erreur explicite dans ce second cas.
+- `save()` écrivait les tours de conversation (`conversation_turns`) dans
+  le même `Promise.all` que leur session parente ; la policy RLS de
+  `conversation_turns` exige que la session référencée existe déjà, et les
+  deux requêtes PostgREST étant indépendantes, le tour pouvait arriver
+  avant que la session ne soit committée. Les tours sont désormais écrits
+  dans un second lot, après confirmation de l'écriture des sessions.
+- Le schéma JSON strict envoyé à OpenAI (voir Phase 3) marquait deux champs
+  comme optionnels sans les lister dans `required`, ce qu'OpenAI rejette
+  en mode `strict: true` — corrigé en parallèle du bug ci-dessus lors de
+  la même session de debug.
+
+Après ces 4 correctifs, le parcours complet (invité → connexion par lien
+magique → bascule de compte → missions avec conversation IA réelle →
+debrief) a été revérifié de bout en bout sans erreur.
+
 ### Phase 3 — Conversation IA
 
 Code livré et testé (typecheck/lint/build/unit/e2e tous verts) :
@@ -150,22 +179,114 @@ Code livré et testé (typecheck/lint/build/unit/e2e tous verts) :
   fonctionnement réel — à ajouter dans une migration ultérieure si
   l'historique exact du fournisseur devient nécessaire.
 
-**Statut** : le code fonctionne dès aujourd'hui en mode hors ligne
-déterministe (aucune clé requise). Passage à la conversation IA générative
-réelle en attente d'une clé `OPENAI_API_KEY` fournie par l'utilisateur.
+**Statut : vérifié en conditions réelles (2026-07-22).** `OPENAI_API_KEY`
+fournie par l'utilisateur, configurée en local et sur Vercel. Corrigé au
+passage : le schéma JSON strict envoyé à OpenAI (Structured Outputs,
+`strict: true`) marquait `correction` et `detectedSignals` comme optionnels
+sans les lister dans `required`, ce qu'OpenAI rejette avec un 400 avant
+même de générer une réponse — chaque appel réel échouait silencieusement
+et retombait en mode hors ligne. Les deux champs sont désormais
+nullable-et-obligatoires (voir `openai-coach-provider.ts`), et le corps de
+réponse d'une erreur OpenAI est maintenant journalisé en entier plutôt que
+le seul code de statut. Conversation IA générative confirmée fonctionnelle
+de bout en bout (local et production), label « Mode hors ligne » absent
+quand OpenAI répond normalement.
 
 ### Phase 4 — Voix
 
-Web Speech API déjà en fallback navigateur dans le prototype V2 ; portée en
-Phase 1 comme option (dégradation gracieuse vers texte). Transcription
-serveur (Whisper/Realtime) ajoutée en Phase 4 quand `OPENAI_API_KEY` est
-disponible.
+Code livré et testé (typecheck/lint/build/unit/e2e tous verts, vérifié
+visuellement dans un vrai navigateur) :
+
+- Nouvelle route serveur `POST /api/voice/transcribe`
+  (`src/app/api/voice/transcribe/route.ts`) : reçoit l'audio enregistré tel
+  quel (pas de multipart), l'envoie à l'API de transcription OpenAI Whisper
+  (`OpenAiTranscriptionProvider`, `src/ai/providers/openai-transcription-provider.ts`,
+  `server-only`) quand `OPENAI_API_KEY` est configuré. Un `GET` sur la même
+  route expose uniquement un booléen `available` (jamais la clé) pour que le
+  client sache quelle méthode utiliser avant même de demander l'accès au
+  micro.
+- `VoiceRecorder` (`src/components/coach/VoiceRecorder.tsx`) réécrit pour
+  suivre l'ordre de préférence du brief (§5.7) : enregistrement navigateur +
+  transcription serveur en priorité quand configuré (`MediaRecorder` +
+  `getUserMedia`), repli sur la Web Speech API du navigateur si non
+  configuré ou non disponible, champ texte toujours disponible en dernier
+  recours. Gère explicitement le refus de micro, une durée maximale
+  d'enregistrement (30s), l'annulation en cours d'enregistrement, et
+  n'affiche jamais d'erreur bloquante — chaque échec retombe sur la méthode
+  suivante ou sur le texte.
+- Lecture vocale du coach et lecture ralentie déjà livrées en Phase 1
+  (`src/lib/speech-synthesis.ts`, réglage `Lecture ralentie` dans
+  `/settings`) — inchangées, aucun travail supplémentaire nécessaire.
+- Métrique vocale : `ConversationTurn.transcriptionConfidence` (déjà présent
+  dans le domaine mais jamais alimenté avant cette phase) est maintenant
+  rempli de bout en bout — `VoiceRecorder` → `handleSend` →
+  `submitUserTurn` — avec la confiance renvoyée par la Web Speech API
+  nativement, ou une heuristique dérivée des `avg_logprob` des segments
+  Whisper (`estimateConfidence`, `src/ai/transcription-confidence.ts`,
+  testée unitairement ; Whisper ne renvoie pas de score de confiance
+  direct).
+- Stockage de l'audio brut : jamais implémenté, conforme au brief (« store
+  transcript and learning signals, not raw audio » par défaut) — le blob
+  audio n'existe que le temps de la requête vers la route de transcription
+  et n'est jamais persisté (ni `localStorage`, ni Supabase).
+
+**Non fait délibérément** : l'API Realtime d'OpenAI (streaming bidirectionnel
+à faible latence, citée comme « preferred production path » plutôt que MVP
+dans le brief) n'a pas été implémentée — le round-trip enregistrement →
+transcription reste plus simple et suffit au critère de sortie de cette
+phase. Piste d'amélioration future si la latence perçue devient un problème.
 
 ### Phase 5 — Intelligence d'apprentissage
 
-Mémoire utilisateur, corrections sélectives basées sur l'historique réel,
-détection de plateau — nécessite des données de sessions réelles
-(post-Phase 2/3).
+Code livré et testé (typecheck/lint/build/unit/e2e tous verts, vérifié
+visuellement dans un vrai navigateur). Déjà en place avant cette phase :
+mise à jour des capacités et du signal de confiance à la fin de chaque
+mission, analyse de débrief, recommandation de mission suivante — cette
+phase ajoute les trois éléments qui manquaient (ODYSSEY_MASTER_PROMPT_CODEX.md
+§ Phase 5 : « selective corrections », « basic memory ») :
+
+- **Corrections sélectives basées sur l'historique réel** : chaque
+  correction réellement produite par le coach OpenAI (`CoachTurn.correction`)
+  porte désormais une `category` (vocabulaire contrôlé : temps verbal,
+  préposition, ordre des mots, article, accord sujet-verbe, vocabulaire,
+  autre — `src/ai/schemas.ts`, `CORRECTION_CATEGORIES`, partagé avec le
+  schéma JSON strict envoyé à OpenAI pour ne jamais diverger). Après chaque
+  tour corrigé, `upsertRecurringError` (`src/domain/recurring-errors.ts`,
+  testé) incrémente ou crée l'entrée correspondante dans
+  `user.recurringErrors`. Le prompt système du coach
+  (`src/ai/prompts/coach-system-prompt.ts`) relit ensuite les patterns actifs
+  les plus fréquents et demande explicitement au coach de les surveiller en
+  priorité plutôt que de corriger au hasard — un vrai bouclage sur des
+  données de session réelles, pas une simulation.
+- **Détection de plateau** (`detectPlateau`, `src/domain/decision-engine.ts`,
+  testé) : combine trois signaux indépendants du
+  `docs/brain/decision-engine.md` — même erreur active répétée
+  (`count >= 3`), capacité qui ne progresse plus malgré ≥ 4 tentatives, et
+  engagement en baisse (nombre de mots appris sur les sessions récentes vs
+  plus anciennes). `recommendMission` applique une pénalité de score aux
+  missions dont la capacité cible est en plateau, biaisant naturellement la
+  recommandation vers un contexte différent (« changer le contexte / le
+  scénario », comme demandé par le brief) sans jamais exclure totalement une
+  mission s'il n'y a pas de meilleure alternative. La raison de la
+  recommandation (déjà calculée mais jamais affichée) est désormais visible
+  sous la mission du jour dans l'UI (`MissionCard`), rendant la
+  personnalisation observable plutôt que silencieuse.
+- **Mémoire de base** (`user.memories`) : jusqu'ici alimentée par aucune
+  écriture réelle malgré la politique `evaluateMemoryCandidate`
+  (`src/domain/memory-policy.ts`) déjà présente et testée depuis la Phase 1.
+  À la fin d'une mission où l'apprenant a effectivement utilisé un
+  mot-clé de réussite attendu (signal déterministe déjà calculé par
+  `computeSessionDebrief`, exposé via le nouveau champ
+  `SessionDebrief.usedSuccessKeyword`), une mémoire
+  `successful_formulation` est créée via la politique existante — donc
+  jamais fabriquée, toujours dérivée d'un fait vérifiable de la session.
+  Plafonnée à 30 entrées pour éviter une croissance illimitée.
+
+Critère de sortie du brief (« Two users with different performance receive
+meaningfully different follow-ups ») : vérifié par test unitaire — deux
+profils utilisateur avec des historiques différents (un avec une erreur
+récurrente active, l'autre sans) reçoivent des raisons de recommandation
+différentes.
 
 ### Phase 6 — Durcissement produit
 

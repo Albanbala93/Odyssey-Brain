@@ -1,5 +1,12 @@
 import { getCapabilityBySlug } from "./capabilities-catalog";
-import type { CapabilityProgress, Mission, MissionDifficulty, UserModel } from "./types";
+import type {
+  CapabilityProgress,
+  Mission,
+  MissionDifficulty,
+  RecurringError,
+  Session,
+  UserModel,
+} from "./types";
 
 function clampDifficulty(value: number): MissionDifficulty {
   return Math.min(5, Math.max(1, Math.round(value))) as MissionDifficulty;
@@ -29,20 +36,83 @@ export interface MissionRecommendation {
   reason: string;
 }
 
+export type PlateauReason = "repeated_error" | "capability_stagnation" | "declining_engagement";
+
+export interface PlateauSignal {
+  isPlateaued: boolean;
+  reasons: PlateauReason[];
+}
+
+const PLATEAU_ERROR_COUNT_THRESHOLD = 3;
+const PLATEAU_ATTEMPT_THRESHOLD = 4;
+const ENGAGEMENT_DECLINE_MIN_SESSIONS = 4;
+const ENGAGEMENT_DECLINE_RATIO = 0.7;
+
+/**
+ * docs/brain/decision-engine.md "Détection de plateau": the same errors
+ * across sessions, a capability that isn't advancing despite practice, or
+ * declining engagement are each, independently, a plateau signal.
+ */
+export function detectPlateau(params: {
+  capability?: CapabilityProgress;
+  recurringErrors: RecurringError[];
+  sessions: Session[];
+}): PlateauSignal {
+  const reasons: PlateauReason[] = [];
+
+  if (
+    params.recurringErrors.some(
+      (e) => e.status === "active" && e.count >= PLATEAU_ERROR_COUNT_THRESHOLD,
+    )
+  ) {
+    reasons.push("repeated_error");
+  }
+
+  if (
+    params.capability &&
+    params.capability.attemptCount >= PLATEAU_ATTEMPT_THRESHOLD &&
+    params.capability.status !== "solid" &&
+    params.capability.status !== "spontaneous"
+  ) {
+    reasons.push("capability_stagnation");
+  }
+
+  const completed = params.sessions
+    .filter((s) => s.status === "completed")
+    .slice()
+    .sort((a, b) => new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime());
+  if (completed.length >= ENGAGEMENT_DECLINE_MIN_SESSIONS) {
+    const half = Math.floor(completed.length / 2);
+    const average = (sessions: Session[]) =>
+      sessions.reduce((sum, s) => sum + s.learnerWordCount, 0) / sessions.length;
+    const earlierAverage = average(completed.slice(0, half));
+    const recentAverage = average(completed.slice(-half));
+    if (earlierAverage > 0 && recentAverage < earlierAverage * ENGAGEMENT_DECLINE_RATIO) {
+      reasons.push("declining_engagement");
+    }
+  }
+
+  return { isPlateaued: reasons.length > 0, reasons };
+}
+
 /**
  * Scores every active mission and returns the single best next
  * recommendation, per docs/brain/brain.md §9 (activity_score) simplified to
  * a deterministic, explainable MVP version:
  *
- *   score = context_relevance + learning_value - repetition_fatigue - difficulty_penalty
+ *   score = context_relevance + learning_value - repetition_fatigue - difficulty_penalty - plateau_penalty
  *
  * Every decision must be explainable (docs/brain/decision-engine.md, "Règles
- * d'or" #1), hence the `reason` string on the result.
+ * d'or" #1), hence the `reason` string on the result. `sessions` (this
+ * learner's history) is optional and defaults to none, so callers that
+ * genuinely have no session history yet (e.g. a brand new guest) don't need
+ * to thread an empty array through explicitly.
  */
 export function recommendMission(
   user: UserModel,
   missions: Mission[],
   now: Date = new Date(),
+  sessions: Session[] = [],
 ): MissionRecommendation {
   const candidates = missions.filter((m) => m.active);
   if (candidates.length === 0) {
@@ -52,6 +122,7 @@ export function recommendMission(
   let best = candidates[0];
   let bestScore = -Infinity;
   let bestReason = "";
+  let bestPlateau: PlateauSignal = { isPlateaued: false, reasons: [] };
 
   for (const mission of candidates) {
     const progress = findCapabilityProgress(user, mission.targetCapabilitySlug);
@@ -75,18 +146,41 @@ export function recommendMission(
 
     const repetitionFatigue = wasPracticedToday(progress, now) ? 2 : 0;
     const difficultyPenalty = user.confidence.global < 0.4 ? (mission.difficulty - 1) * 0.5 : 0;
+    const plateau = detectPlateau({
+      capability: progress,
+      recurringErrors: user.recurringErrors,
+      sessions,
+    });
+    // Biases the recommendation toward a different context/capability when
+    // this one is plateaued ("changer le contexte / le scénario"), without
+    // ever excluding it outright — if nothing better is available, the
+    // learner still gets a mission rather than no recommendation at all.
+    const plateauPenalty = plateau.isPlateaued ? 2.5 : 0;
 
-    const score = contextRelevance + learningValue - repetitionFatigue - difficultyPenalty;
+    const score =
+      contextRelevance + learningValue - repetitionFatigue - difficultyPenalty - plateauPenalty;
 
     if (score > bestScore) {
       bestScore = score;
       best = mission;
+      bestPlateau = plateau;
       const relevanceReason = contextRelevance > 0 ? "correspond à un contexte prioritaire, " : "";
       bestReason = `${relevanceReason}${learningReason}`.trim();
     }
   }
 
-  return { mission: best, reason: bestReason || "meilleure option disponible actuellement" };
+  // Only surfaced when the winning mission is itself still plateaued (i.e.
+  // avoidance couldn't find a better alternative) — otherwise the penalty
+  // already did its job silently, consistent with repetitionFatigue and
+  // difficultyPenalty, which also influence scoring without dedicated text.
+  const plateauNote = bestPlateau.isPlateaued
+    ? "cette compétence semble stagner, on varie le contexte pour la suite, "
+    : "";
+
+  return {
+    mission: best,
+    reason: plateauNote + (bestReason || "meilleure option disponible actuellement"),
+  };
 }
 
 /**
@@ -155,8 +249,9 @@ export function buildSessionPlan(
   user: UserModel,
   missions: Mission[],
   now: Date = new Date(),
+  sessions: Session[] = [],
 ): SessionPlan {
-  const { mission, reason } = recommendMission(user, missions, now);
+  const { mission, reason } = recommendMission(user, missions, now, sessions);
   return {
     mission,
     difficulty: decideDifficulty(user, mission.targetCapabilitySlug),

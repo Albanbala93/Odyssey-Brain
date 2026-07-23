@@ -77,8 +77,14 @@ export class SupabaseStateRepository implements UserStateRepository {
       .returns<ProfileRow>();
 
     if (profileError) {
+      // Distinct from "no profile row exists yet" (which `.maybeSingle()`
+      // reports as `data: null, error: null`, handled below): a real query
+      // error here must not be treated as "first sign-in" by the caller, or
+      // it re-runs the guest-to-account migration against an account that
+      // already exists, minting a new profile id that conflicts with
+      // existing foreign keys (e.g. user_preferences.user_id).
       console.error("[SupabaseStateRepository] failed to load profile", profileError);
-      return null;
+      throw new Error("Failed to load Supabase profile");
     }
     if (!profile) return null;
 
@@ -189,14 +195,25 @@ export class SupabaseStateRepository implements UserStateRepository {
     if (sessions.length > 0)
       writes.push(asWrite(supabase.from("sessions").upsert(asUpsertArg(sessions))));
 
+    const results = await Promise.all(writes);
+
+    // conversation_turns' RLS policy requires its session_id to already
+    // exist in `sessions` (see 0001_init.sql). Writing turns in the same
+    // Promise.all as the sessions upsert above is a race: PostgREST issues
+    // each upsert as an independent request/transaction, so a turn insert
+    // can reach the database before its parent session's insert commits,
+    // failing with "new row violates row-level security policy" even
+    // though the session upsert itself succeeds moments later. Turns are
+    // therefore only written after `sessions` above has been awaited.
+    const turnWrites: Promise<{ error: unknown } | undefined>[] = [];
     for (const session of state.sessions) {
       const turns = mapSessionToTurnUpserts(session as Session);
       if (turns.length > 0)
-        writes.push(asWrite(supabase.from("conversation_turns").upsert(asUpsertArg(turns))));
+        turnWrites.push(asWrite(supabase.from("conversation_turns").upsert(asUpsertArg(turns))));
     }
+    const turnResults = await Promise.all(turnWrites);
 
-    const results = await Promise.all(writes);
-    for (const result of results) {
+    for (const result of [...results, ...turnResults]) {
       if (result?.error)
         console.error("[SupabaseStateRepository] partial save failure", result.error);
     }

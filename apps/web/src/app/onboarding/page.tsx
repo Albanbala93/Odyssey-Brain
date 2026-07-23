@@ -92,6 +92,7 @@ export default function OnboardingPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ton prénom"
+              aria-label="Ton prénom"
               className="border-border bg-surface rounded-2xl border px-4 py-3.5 text-base"
               onKeyDown={(e) => e.key === "Enter" && name.trim() && setStep(1)}
             />
@@ -139,6 +140,7 @@ export default function OnboardingPage() {
               value={professionalContext}
               onChange={(e) => setProfessionalContext(e.target.value)}
               placeholder="Ex : chef de projet marketing"
+              aria-label="Ton activité professionnelle"
               className="border-border bg-surface rounded-2xl border px-4 py-3.5 text-base"
               onKeyDown={(e) => e.key === "Enter" && setStep(3)}
             />

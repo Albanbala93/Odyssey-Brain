@@ -70,7 +70,7 @@ export default function TodayPage() {
   const otherMissions = MISSIONS.filter((m) => m.id !== recommendation.mission.id);
   const progressMission =
     otherMissions.length > 0
-      ? recommendMission(state.user, otherMissions).mission
+      ? recommendMission(state.user, otherMissions, undefined, state.sessions).mission
       : recommendation.mission;
 
   // "Discussion libre" picks among informal/networking scenarios using the
@@ -79,7 +79,7 @@ export default function TodayPage() {
   const networkingMissions = MISSIONS.filter((m) => m.contextType === "networking");
   const freeChatMission =
     networkingMissions.length > 0
-      ? recommendMission(state.user, networkingMissions).mission
+      ? recommendMission(state.user, networkingMissions, undefined, state.sessions).mission
       : recommendation.mission;
 
   return (
@@ -100,6 +100,7 @@ export default function TodayPage() {
           mission={recommendation.mission}
           translationMode={state.user.preferences.translationMode}
           onStart={() => handleStart("primary", recommendation.mission.id)}
+          reason={recommendation.reason}
           isLoading={isStarting === "primary"}
         />
 
