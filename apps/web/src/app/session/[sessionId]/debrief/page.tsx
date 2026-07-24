@@ -75,15 +75,36 @@ export default function DebriefPage() {
             {strength}
           </FeedbackCard>
         ))}
-        <FeedbackCard eyebrow="Prochaine amélioration">{debrief.priorityImprovement}</FeedbackCard>
+        <FeedbackCard
+          eyebrow={
+            debrief.correctionSource === "session"
+              ? "D'après cette session"
+              : "Prochaine amélioration"
+          }
+        >
+          {debrief.correctionSource === "session" && debrief.originalText ? (
+            <>
+              Tu as dit : « {debrief.originalText} ». {debrief.priorityImprovement}
+            </>
+          ) : (
+            debrief.priorityImprovement
+          )}
+        </FeedbackCard>
         <FeedbackCard eyebrow="Exemple amélioré">“{debrief.improvedExample}”</FeedbackCard>
+        {debrief.practiceRecommendation && (
+          <FeedbackCard eyebrow="Exercice recommandé" tone="warning">
+            {debrief.practiceRecommendation.reason}
+          </FeedbackCard>
+        )}
 
         <div className="mt-auto flex flex-col gap-2 pt-4">
           {nextMission && (
             <Button onClick={startNext}>Mission suivante : {nextMission.titleFr}</Button>
           )}
           <Button variant="secondary" onClick={replay}>
-            Rejouer cette mission
+            {debrief.practiceRecommendation
+              ? "Rejouer pour t'entraîner sur ce point"
+              : "Rejouer cette mission"}
           </Button>
           <Button variant="ghost" onClick={() => router.push("/today")}>
             Retour à Today
