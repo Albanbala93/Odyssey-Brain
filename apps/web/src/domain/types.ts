@@ -10,6 +10,14 @@
 
 export type TranslationMode = "always" | "adaptive" | "on_demand";
 
+/**
+ * The learner's chosen difficulty band, from easiest to hardest —
+ * "adaptive" (the default) keeps the existing confidence-based automatic
+ * behavior in decision-engine.ts unchanged; any other value is an explicit
+ * choice that takes priority over that heuristic.
+ */
+export type DifficultyLevel = "adaptive" | "easy" | "medium" | "hard";
+
 export type DataSource = "declared" | "observed" | "inferred";
 
 /** A single scalar fact with provenance, used throughout the user model. */
@@ -140,6 +148,7 @@ export interface UserModel {
     autoSpeak: boolean;
     slowSpeech: boolean;
     preferredSessionMinutes: number;
+    difficultyLevel: DifficultyLevel;
   };
   recurringErrors: RecurringError[];
   memories: UserMemory[];

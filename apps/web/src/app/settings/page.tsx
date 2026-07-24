@@ -4,7 +4,7 @@ import { AppShell, Splash } from "@/components/AppShell";
 import { BottomNavigation } from "@/components/BottomNavigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import type { TranslationMode } from "@/domain/types";
+import type { DifficultyLevel, TranslationMode } from "@/domain/types";
 import { useAppState } from "@/lib/app-state";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useRouter } from "next/navigation";
@@ -104,6 +104,22 @@ export default function SettingsPage() {
               <option value="always">Toujours afficher</option>
               <option value="adaptive">Laisser Odyssey décider</option>
               <option value="on_demand">À la demande</option>
+            </select>
+          </label>
+
+          <label className="flex flex-col gap-1.5 text-sm font-medium">
+            Niveau
+            <select
+              value={preferences.difficultyLevel}
+              onChange={(e) =>
+                updatePreferences({ difficultyLevel: e.target.value as DifficultyLevel })
+              }
+              className="border-border bg-surface rounded-xl border px-3 py-2.5"
+            >
+              <option value="adaptive">Laisser Odyssey décider</option>
+              <option value="easy">Facile</option>
+              <option value="medium">Moyen</option>
+              <option value="hard">Difficile</option>
             </select>
           </label>
 
