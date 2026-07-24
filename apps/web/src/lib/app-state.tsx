@@ -241,9 +241,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  // Called during render (today/page.tsx computes this inside a useMemo to
+  // decide what to display) — must read `state` directly like getSession
+  // below, not `stateRef.current`, which only resyncs one render later via
+  // an effect. A settings change (e.g. Niveau) followed by navigating
+  // straight to Today would otherwise render the recommendation computed
+  // from the pre-change user until some unrelated re-render caught up.
   const recommendedMission = useCallback(() => {
-    return recommendMission(stateRef.current.user, MISSIONS, undefined, stateRef.current.sessions);
-  }, []);
+    return recommendMission(state.user, MISSIONS, undefined, state.sessions);
+  }, [state]);
 
   const startMission = useCallback(async (missionId?: string) => {
     const currentUser = stateRef.current.user;
@@ -359,6 +365,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         frenchText: nextTurn.french,
         comprehensionRisk: nextTurn.detectedSignals?.comprehensionRisk,
         source,
+        // Kept on the turn (not just folded into recurringErrors below) so
+        // the debrief can show what was actually corrected in this session
+        // instead of always falling back to the mission's generic example.
+        correction: nextTurn.correction,
         createdAt: new Date().toISOString(),
       };
 
@@ -412,6 +422,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     const debrief = computeSessionDebrief({
       mission,
       userTurns,
+      turns: session.turns,
+      recurringErrors: currentState.user.recurringErrors,
       recommendedNextMissionId: next?.mission.id ?? null,
     });
 

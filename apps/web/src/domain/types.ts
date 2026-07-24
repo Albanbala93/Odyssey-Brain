@@ -10,6 +10,14 @@
 
 export type TranslationMode = "always" | "adaptive" | "on_demand";
 
+/**
+ * The learner's chosen difficulty band, from easiest to hardest —
+ * "adaptive" (the default) keeps the existing confidence-based automatic
+ * behavior in decision-engine.ts unchanged; any other value is an explicit
+ * choice that takes priority over that heuristic.
+ */
+export type DifficultyLevel = "adaptive" | "easy" | "medium" | "hard";
+
 export type DataSource = "declared" | "observed" | "inferred";
 
 /** A single scalar fact with provenance, used throughout the user model. */
@@ -140,6 +148,7 @@ export interface UserModel {
     autoSpeak: boolean;
     slowSpeech: boolean;
     preferredSessionMinutes: number;
+    difficultyLevel: DifficultyLevel;
   };
   recurringErrors: RecurringError[];
   memories: UserMemory[];
@@ -185,6 +194,14 @@ export interface Mission {
 
 export type SessionStatus = "in_progress" | "completed" | "abandoned";
 
+/** The same structured correction the coach produced live (ai/schemas.ts CoachTurn.correction), kept on the turn so the debrief can reference what was actually said instead of generic mission copy. */
+export interface TurnCorrection {
+  original: string;
+  improved: string;
+  explanationFr: string;
+  category: string;
+}
+
 export interface ConversationTurn {
   id: string;
   turnIndex: number;
@@ -196,6 +213,8 @@ export interface ConversationTurn {
   comprehensionRisk?: number;
   /** For coach turns: which provider produced this reply, so the UI can label offline/fallback responses (ODYSSEY_MASTER_PROMPT_CODEX.md §21). */
   source?: "openai" | "local_fallback";
+  /** For coach turns: present only when the coach corrected this specific turn. */
+  correction?: TurnCorrection;
   createdAt: string;
 }
 
@@ -205,6 +224,12 @@ export interface SessionDebrief {
   strengths: string[]; // max 2
   priorityImprovement: string;
   improvedExample: string;
+  /** "session" when priorityImprovement/improvedExample came from a real correction made this session; "generic" when they fall back to the mission's canned example (e.g. a flawless or very short session). The debrief UI must not present a generic tip as if it were personalized feedback. */
+  correctionSource: "session" | "generic";
+  /** The learner's actual phrase that was corrected, only set when correctionSource is "session". */
+  originalText?: string;
+  /** A targeted replay suggestion, only set when the correction category is a genuine recurring pattern (count >= 2 in user.recurringErrors) — never fabricated from a single mistake. */
+  practiceRecommendation: { missionId: string; reason: string } | null;
   learnerWordCount: number;
   scoreDelta: number; // percentage points added to the capability
   recommendedNextMissionId: string | null;

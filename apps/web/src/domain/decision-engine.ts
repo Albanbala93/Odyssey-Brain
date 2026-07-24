@@ -1,6 +1,7 @@
 import { getCapabilityBySlug } from "./capabilities-catalog";
 import type {
   CapabilityProgress,
+  DifficultyLevel,
   Mission,
   MissionDifficulty,
   RecurringError,
@@ -11,6 +12,13 @@ import type {
 function clampDifficulty(value: number): MissionDifficulty {
   return Math.min(5, Math.max(1, Math.round(value))) as MissionDifficulty;
 }
+
+/** The mission difficulty each explicit level targets — "adaptive" has no fixed target, it keeps the confidence-based heuristic instead. */
+const DIFFICULTY_LEVEL_TARGET: Record<Exclude<DifficultyLevel, "adaptive">, MissionDifficulty> = {
+  easy: 1,
+  medium: 3,
+  hard: 5,
+};
 
 function findCapabilityProgress(
   user: UserModel,
@@ -145,7 +153,16 @@ export function recommendMission(
     }
 
     const repetitionFatigue = wasPracticedToday(progress, now) ? 2 : 0;
-    const difficultyPenalty = user.confidence.global < 0.4 ? (mission.difficulty - 1) * 0.5 : 0;
+    // An explicit level choice (Settings > Niveau) takes priority over the
+    // confidence-based heuristic — the whole point of choosing a level is to
+    // override the automatic guess, not to be quietly overridden by it.
+    const difficultyPenalty =
+      user.preferences.difficultyLevel === "adaptive"
+        ? user.confidence.global < 0.4
+          ? (mission.difficulty - 1) * 0.5
+          : 0
+        : Math.abs(mission.difficulty - DIFFICULTY_LEVEL_TARGET[user.preferences.difficultyLevel]) *
+          0.8;
     const plateau = detectPlateau({
       capability: progress,
       recurringErrors: user.recurringErrors,
@@ -187,9 +204,14 @@ export function recommendMission(
  * Difficulty stays in the learner's progression zone: hard enough to teach
  * something, easy enough to protect confidence (docs/brain/decision-engine.md
  * "Politique de difficulté"). Low global confidence always wins and forces
- * the easiest setting.
+ * the easiest setting. An explicit level choice (Settings > Niveau)
+ * overrides this heuristic entirely, same as in recommendMission.
  */
 export function decideDifficulty(user: UserModel, capabilitySlug: string): MissionDifficulty {
+  if (user.preferences.difficultyLevel !== "adaptive") {
+    return DIFFICULTY_LEVEL_TARGET[user.preferences.difficultyLevel];
+  }
+
   if (user.confidence.global < 0.35) return 1;
 
   const progress = findCapabilityProgress(user, capabilitySlug);

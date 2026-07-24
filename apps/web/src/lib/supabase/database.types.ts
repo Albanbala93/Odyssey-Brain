@@ -47,6 +47,7 @@ interface UserPreferencesRow {
   auto_speak: boolean;
   slow_speech: boolean;
   preferred_session_minutes: number;
+  difficulty_level: string;
   notification_settings: unknown;
   consent: unknown;
 }
@@ -91,6 +92,7 @@ interface ConversationTurnsRow {
   english_text: string;
   french_text: string | null;
   transcription_confidence: number | null;
+  correction: unknown;
   created_at: string;
 }
 

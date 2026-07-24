@@ -5,6 +5,7 @@ import type {
   ConsentState,
   ConversationTurn,
   DataSource,
+  DifficultyLevel,
   GoalCategory,
   MemoryCategory,
   OdysseyState,
@@ -123,6 +124,7 @@ export function mapRowsToOdysseyState(rows: OdysseyStateRows): OdysseyState {
       autoSpeak: preferences?.auto_speak ?? true,
       slowSpeech: preferences?.slow_speech ?? false,
       preferredSessionMinutes: preferences?.preferred_session_minutes ?? 8,
+      difficultyLevel: (preferences?.difficulty_level as DifficultyLevel) ?? "adaptive",
     },
     recurringErrors: recurringErrors.map((e) => ({
       id: e.id,
@@ -166,6 +168,7 @@ export function mapRowsToOdysseyState(rows: OdysseyStateRows): OdysseyState {
         englishText: t.english_text,
         frenchText: t.french_text ?? undefined,
         transcriptionConfidence: t.transcription_confidence ?? undefined,
+        correction: (t.correction as ConversationTurn["correction"]) ?? undefined,
         createdAt: t.created_at,
       })),
     learnerWordCount: s.learner_word_count,
@@ -202,6 +205,7 @@ export function mapStateToPreferencesUpsert(
     auto_speak: state.user.preferences.autoSpeak,
     slow_speech: state.user.preferences.slowSpeech,
     preferred_session_minutes: state.user.preferences.preferredSessionMinutes,
+    difficulty_level: state.user.preferences.difficultyLevel,
     consent: state.user.consent,
   };
 }
@@ -298,6 +302,7 @@ export function mapSessionToTurnUpserts(
     english_text: t.englishText,
     french_text: t.frenchText ?? null,
     transcription_confidence: t.transcriptionConfidence ?? null,
+    correction: t.correction ?? null,
     created_at: t.createdAt,
   }));
 }
