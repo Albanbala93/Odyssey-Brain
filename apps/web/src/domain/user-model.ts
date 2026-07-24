@@ -1,6 +1,6 @@
 import { createId } from "@/lib/id";
 import { CAPABILITIES } from "./capabilities-catalog";
-import type { CapabilityProgress, GoalCategory, UserModel } from "./types";
+import type { CapabilityProgress, ContextType, GoalCategory, UserModel } from "./types";
 
 /**
  * Creates a fresh guest user model. Guest progress lives only on the device
@@ -55,11 +55,17 @@ export function createGuestUserModel(now: Date = new Date()): UserModel {
   };
 }
 
+/** A situation picked on onboarding Screen 5, tied to the real ContextType it represents. */
+export interface OnboardingSituation {
+  type: ContextType;
+  label: string;
+}
+
 export interface OnboardingAnswers {
   name: string;
   goalCategory: GoalCategory;
   professionalContext?: string;
-  situations: string[];
+  situations: OnboardingSituation[];
 }
 
 /** Applies the onboarding answers (ODYSSEY_MASTER_PROMPT_CODEX.md §5.2) to a user model. */
@@ -84,10 +90,16 @@ export function applyOnboardingAnswers(
         active: true,
       },
     ],
-    contexts: answers.situations.map((label) => ({
+    // Each selected situation carries its real ContextType from the picker
+    // (onboarding/page.tsx) rather than being tagged "other" — this is what
+    // lets the decision engine's contextRelevance scoring
+    // (decision-engine.ts) actually match missions to what the learner said
+    // they need, instead of always falling back to whichever mission is
+    // first in the catalogue.
+    contexts: answers.situations.map((situation) => ({
       id: createId(),
-      type: "other" as const,
-      label,
+      type: situation.type,
+      label: situation.label,
     })),
     memories: answers.professionalContext
       ? [

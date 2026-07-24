@@ -69,6 +69,16 @@ describe("recommendMission", () => {
     expect(reason).toContain("stagne");
   });
 
+  it("reaches the daily-life and studies missions added for non-professional goals", () => {
+    const dailyLifeUser = createGuestUserModel();
+    dailyLifeUser.contexts = [{ id: "ctx-1", type: "daily_life", label: "Everyday life" }];
+    expect(recommendMission(dailyLifeUser, MISSIONS).mission.contextType).toBe("daily_life");
+
+    const studiesUser = createGuestUserModel();
+    studiesUser.contexts = [{ id: "ctx-1", type: "studies", label: "Classes" }];
+    expect(recommendMission(studiesUser, MISSIONS).mission.contextType).toBe("studies");
+  });
+
   it("two users with different histories receive different recommendations", () => {
     const thriving = createGuestUserModel();
     const struggling = createGuestUserModel();
