@@ -359,6 +359,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         frenchText: nextTurn.french,
         comprehensionRisk: nextTurn.detectedSignals?.comprehensionRisk,
         source,
+        // Kept on the turn (not just folded into recurringErrors below) so
+        // the debrief can show what was actually corrected in this session
+        // instead of always falling back to the mission's generic example.
+        correction: nextTurn.correction,
         createdAt: new Date().toISOString(),
       };
 
@@ -412,6 +416,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     const debrief = computeSessionDebrief({
       mission,
       userTurns,
+      turns: session.turns,
+      recurringErrors: currentState.user.recurringErrors,
       recommendedNextMissionId: next?.mission.id ?? null,
     });
 
