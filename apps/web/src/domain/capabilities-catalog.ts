@@ -78,6 +78,42 @@ export const CAPABILITIES: CapabilityDefinition[] = [
     labelFr: "Résoudre un problème en voyage",
     descriptionFr: "Gérer un imprévu pratique (hôtel, transport, restaurant) en anglais.",
   },
+  {
+    id: "cap-describe-problem",
+    slug: "describe_a_problem",
+    labelFr: "Décrire un problème du quotidien",
+    descriptionFr: "Expliquer clairement un souci pratique ou de santé à un professionnel.",
+  },
+  {
+    id: "cap-order-and-adjust",
+    slug: "order_and_adjust",
+    labelFr: "Commander et ajuster une commande",
+    descriptionFr: "Passer une commande et corriger poliment une erreur.",
+  },
+  {
+    id: "cap-clarify-in-conversation",
+    slug: "clarify_in_conversation",
+    labelFr: "Clarifier à l'oral ce qu'on a écrit",
+    descriptionFr: "Expliquer de vive voix le contenu d'un message écrit qui n'était pas clair.",
+  },
+  {
+    id: "cap-participate-group-work",
+    slug: "participate_in_group_work",
+    labelFr: "Participer à un travail de groupe",
+    descriptionFr: "Donner son avis et négocier dans un contexte d'étude en groupe.",
+  },
+  {
+    id: "cap-answer-presentation-questions",
+    slug: "answer_presentation_questions",
+    labelFr: "Répondre à des questions après une présentation",
+    descriptionFr: "Répondre avec assurance aux questions posées après un exposé.",
+  },
+  {
+    id: "cap-ask-for-directions",
+    slug: "ask_for_directions",
+    labelFr: "Demander et comprendre un itinéraire",
+    descriptionFr: "Demander son chemin et confirmer qu'on a compris la réponse.",
+  },
 ];
 
 export function getCapabilityBySlug(slug: string): CapabilityDefinition | undefined {

@@ -38,6 +38,8 @@ export type ContextType =
   | "interviews"
   | "networking"
   | "travel"
+  | "daily_life"
+  | "studies"
   | "other";
 
 export interface UserContext {

@@ -566,6 +566,263 @@ export const MISSIONS: Mission[] = [
     },
     active: true,
   },
+  {
+    id: "mission-pharmacy-symptoms",
+    slug: "explain-symptoms-at-a-pharmacy",
+    title: "Explain what's wrong to a pharmacist",
+    titleFr: "Expliquer ton problème à un pharmacien",
+    description: "You're not feeling well and need advice at a pharmacy counter.",
+    descriptionFr: "Tu ne te sens pas bien et as besoin de conseils au comptoir d'une pharmacie.",
+    targetSituation: "Pharmacy counter, explaining symptoms",
+    targetCapabilitySlug: "describe_a_problem",
+    contextType: "daily_life",
+    estimatedMinutes: 5,
+    difficulty: 1,
+    openingPrompt: {
+      english: "Hi there, how can I help you today?",
+      french: "Bonjour, comment puis-je vous aider aujourd'hui ?",
+      successKeywords: ["i have", "i've got", "my", "hurts", "feel"],
+    },
+    scriptedTurns: [
+      {
+        english: "I see. How long have you had this?",
+        french: "Je vois. Depuis combien de temps avez-vous ça ?",
+      },
+      {
+        english: "Okay, I'd recommend this. Take it twice a day — does that work for you?",
+        french:
+          "D'accord, je vous recommande ceci. Prenez-le deux fois par jour, ça vous convient ?",
+      },
+    ],
+    followUpIntents: [
+      "Ask about side effects",
+      "Ask if it's safe with other medication",
+      "Ask for a cheaper alternative",
+    ],
+    successConditions: ["The learner clearly describes what's wrong"],
+    exampleDebrief: {
+      strength: "Tu as décrit ton symptôme de façon simple et compréhensible.",
+      improvement: "Précise depuis quand tu ressens ça, ça aide beaucoup le pharmacien.",
+      improvedExample: "I've had a sore throat and a mild fever since yesterday evening.",
+    },
+    active: true,
+  },
+  {
+    id: "mission-restaurant-order",
+    slug: "order-at-a-restaurant",
+    title: "Order at a restaurant and fix a mistake",
+    titleFr: "Commander au restaurant et corriger une erreur",
+    description: "Order a meal, then politely point out the waiter brought you the wrong dish.",
+    descriptionFr:
+      "Commande un plat, puis signale poliment que le serveur t'a apporté le mauvais plat.",
+    targetSituation: "Restaurant table, placing and correcting an order",
+    targetCapabilitySlug: "order_and_adjust",
+    contextType: "daily_life",
+    estimatedMinutes: 5,
+    difficulty: 1,
+    openingPrompt: {
+      english: "Hi, welcome! Are you ready to order, or do you need a few more minutes?",
+      french:
+        "Bonjour, bienvenue ! Vous êtes prêt à commander, ou vous avez besoin de plus de temps ?",
+      successKeywords: ["i'll have", "i'd like", "can i get", "could i get"],
+    },
+    scriptedTurns: [
+      {
+        english: "Great choice. Anything to drink?",
+        french: "Excellent choix. Une boisson avec ça ?",
+      },
+      {
+        english:
+          "(A few minutes later) Here you go — one chicken salad! ... Oh wait, is something wrong?",
+        french: "(Quelques minutes plus tard) Voilà — une salade au poulet ! ... Il y a un souci ?",
+      },
+    ],
+    followUpIntents: [
+      "Explain that you actually ordered the salmon",
+      "Ask how long the correct dish will take",
+      "Ask for the bill instead",
+    ],
+    successConditions: ["The learner politely points out the mistake"],
+    exampleDebrief: {
+      strength: "Tu as signalé l'erreur sans être brusque.",
+      improvement: "Rappelle ce que tu avais commandé exactement, pas juste que c'est faux.",
+      improvedExample:
+        "Sorry, I think there's a mix-up — I actually ordered the salmon, not the chicken salad.",
+    },
+    active: true,
+  },
+  {
+    id: "mission-clarify-email",
+    slug: "clarify-a-confusing-email",
+    title: "Clarify a confusing email out loud",
+    titleFr: "Clarifier un e-mail confus à l'oral",
+    description: "A colleague calls because they didn't understand your email. Explain clearly.",
+    descriptionFr:
+      "Un collègue t'appelle parce qu'il n'a pas compris ton e-mail. Entraîne-toi à expliquer clairement.",
+    targetSituation: "Phone call clarifying a written email",
+    targetCapabilitySlug: "clarify_in_conversation",
+    contextType: "emails",
+    estimatedMinutes: 6,
+    difficulty: 2,
+    openingPrompt: {
+      english:
+        "Hey, sorry to call — I got your email but I'm not totally sure what you need from me?",
+      french:
+        "Hey, désolé de t'appeler — j'ai reçu ton e-mail mais je ne suis pas sûr de ce que tu attends de moi ?",
+      successKeywords: ["what i meant", "sorry", "let me explain", "basically"],
+    },
+    scriptedTurns: [
+      {
+        english: "Ah okay, that makes more sense. So when do you need this by?",
+        french: "Ah d'accord, ça a plus de sens. Donc tu as besoin de ça pour quand ?",
+      },
+      {
+        english: "Got it, I'll get started. Should I loop anyone else in?",
+        french: "Compris, je m'y mets. Je dois mettre quelqu'un d'autre au courant ?",
+      },
+    ],
+    followUpIntents: [
+      "Give a clearer deadline",
+      "Explain why the request changed",
+      "Suggest a quick follow-up call instead of more emails",
+    ],
+    successConditions: ["The learner restates the request in clearer terms than the email"],
+    exampleDebrief: {
+      strength: "Tu as reformulé ta demande de façon plus claire qu'à l'écrit.",
+      improvement: "Donne un délai concret dès le début, ça évite un aller-retour de plus.",
+      improvedExample:
+        "Sorry, let me explain — I basically need the updated numbers by Thursday morning.",
+    },
+    active: true,
+  },
+  {
+    id: "mission-group-project-discussion",
+    slug: "group-project-discussion",
+    title: "Share your opinion during a group project discussion",
+    titleFr: "Donner ton avis pendant un travail de groupe",
+    description: "Your study group is deciding how to split up a project. Share your view.",
+    descriptionFr: "Ton groupe d'étude décide comment répartir un projet. Donne ton point de vue.",
+    targetSituation: "Study group deciding how to split project work",
+    targetCapabilitySlug: "participate_in_group_work",
+    contextType: "studies",
+    estimatedMinutes: 6,
+    difficulty: 2,
+    openingPrompt: {
+      english: "So, how do you think we should split up the project?",
+      french: "Alors, comment tu penses qu'on devrait répartir le projet ?",
+      successKeywords: ["i think", "maybe we could", "i'd suggest", "what if"],
+    },
+    scriptedTurns: [
+      {
+        english: "That could work. What part would you want to take?",
+        french: "Ça pourrait marcher. Quelle partie tu voudrais prendre ?",
+      },
+      {
+        english: "Sounds good. When should we all check back in on progress?",
+        french: "Ça marche. Quand est-ce qu'on devrait refaire le point sur l'avancement ?",
+      },
+    ],
+    followUpIntents: [
+      "Suggest a deadline for the first draft",
+      "Ask someone else what they'd prefer",
+      "Propose splitting by strengths instead of by section",
+    ],
+    successConditions: ["The learner proposes a concrete way to split the work"],
+    exampleDebrief: {
+      strength: "Tu as proposé une répartition concrète, pas juste une idée vague.",
+      improvement: "Précise quelle partie tu prends toi-même, ça avance la discussion plus vite.",
+      improvedExample:
+        "I'd suggest splitting it by topic — I could take the research part if that works.",
+    },
+    active: true,
+  },
+  {
+    id: "mission-presentation-qna",
+    slug: "answer-questions-after-a-class-presentation",
+    title: "Answer a question after a class presentation",
+    titleFr: "Répondre à une question après une présentation en cours",
+    description: "You just gave a class presentation. Answer a follow-up question from the room.",
+    descriptionFr:
+      "Tu viens de faire une présentation en cours. Réponds à une question posée dans la salle.",
+    targetSituation: "Q&A right after presenting in class",
+    targetCapabilitySlug: "answer_presentation_questions",
+    contextType: "studies",
+    estimatedMinutes: 5,
+    difficulty: 3,
+    openingPrompt: {
+      english: "Great presentation. Can you tell us more about how you chose your method?",
+      french:
+        "Très belle présentation. Tu peux nous en dire plus sur comment tu as choisi ta méthode ?",
+      successKeywords: ["i chose", "because", "the reason", "i decided"],
+    },
+    scriptedTurns: [
+      {
+        english: "Interesting. And did you consider any other approach?",
+        french: "Intéressant. Tu as envisagé une autre approche ?",
+      },
+      {
+        english: "Makes sense, thanks for clarifying.",
+        french: "Ça se tient, merci pour la précision.",
+      },
+    ],
+    followUpIntents: [
+      "Mention a limitation of your approach",
+      "Compare it briefly to an alternative",
+      "Ask if that answered the question",
+    ],
+    successConditions: ["The learner gives a reasoned answer, not just yes/no"],
+    exampleDebrief: {
+      strength: "Tu as justifié ton choix au lieu de juste le décrire.",
+      improvement: "Mentionne une limite ou une alternative, ça montre une réflexion plus poussée.",
+      improvedExample:
+        "I chose this method because it was simpler to test — though a larger sample would've been more reliable.",
+    },
+    active: true,
+  },
+  {
+    id: "mission-ask-directions",
+    slug: "ask-for-directions",
+    title: "Ask for directions and understand them in a new city",
+    titleFr: "Demander son chemin dans une ville inconnue",
+    description:
+      "You're lost in a new city. Ask a stranger for directions and confirm you understood.",
+    descriptionFr:
+      "Tu es perdu dans une ville inconnue. Demande ton chemin à un inconnu et confirme avoir compris.",
+    targetSituation: "Lost in an unfamiliar city, asking a stranger for help",
+    targetCapabilitySlug: "ask_for_directions",
+    contextType: "travel",
+    estimatedMinutes: 5,
+    difficulty: 1,
+    openingPrompt: {
+      english: "Hi, are you lost? Can I help you find something?",
+      french: "Bonjour, vous êtes perdu ? Je peux vous aider à trouver quelque chose ?",
+      successKeywords: ["i'm looking for", "how do i get to", "could you tell me"],
+    },
+    scriptedTurns: [
+      {
+        english:
+          "Sure — go straight for two blocks, then turn left at the pharmacy. It's right there.",
+        french:
+          "Bien sûr — allez tout droit pendant deux rues, puis tournez à gauche à la pharmacie. C'est juste là.",
+      },
+      {
+        english: "No problem! Have a good day.",
+        french: "Pas de souci ! Bonne journée.",
+      },
+    ],
+    followUpIntents: [
+      "Ask how long it takes on foot",
+      "Ask if there's a bus that goes there",
+      "Confirm you understood by repeating the directions",
+    ],
+    successConditions: ["The learner repeats the directions back to confirm understanding"],
+    exampleDebrief: {
+      strength: "Tu as confirmé les indications au lieu de juste dire merci.",
+      improvement: "Répète les indications avec tes propres mots pour bien vérifier.",
+      improvedExample: "So straight for two blocks, then left at the pharmacy — got it, thank you!",
+    },
+    active: true,
+  },
 ];
 
 export function getMissionBySlug(slug: string): Mission | undefined {
