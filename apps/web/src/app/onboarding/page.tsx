@@ -25,10 +25,7 @@ const GOAL_OPTIONS: { value: GoalCategory; en: string; fr: string; emoji: string
  * correspondent pas" bug report). Each option's `type` is the real
  * ContextType the decision engine matches missions against.
  */
-const SITUATION_OPTIONS: Record<
-  GoalCategory,
-  { type: ContextType; en: string; fr: string }[]
-> = {
+const SITUATION_OPTIONS: Record<GoalCategory, { type: ContextType; en: string; fr: string }[]> = {
   work: [
     { type: "meetings", en: "Meetings", fr: "Réunions" },
     { type: "clients", en: "Clients", fr: "Clients" },

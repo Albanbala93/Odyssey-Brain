@@ -91,7 +91,8 @@ export default function TodayPage() {
   const selectedCasualTypes = state.user.contexts
     .map((c) => c.type)
     .filter((type): type is ContextType => CASUAL_CONTEXT_TYPES.includes(type));
-  const casualContextTypes = selectedCasualTypes.length > 0 ? selectedCasualTypes : CASUAL_CONTEXT_TYPES;
+  const casualContextTypes =
+    selectedCasualTypes.length > 0 ? selectedCasualTypes : CASUAL_CONTEXT_TYPES;
   const freeChatCandidates = MISSIONS.filter((m) => casualContextTypes.includes(m.contextType));
   const freeChatMission =
     freeChatCandidates.length > 0

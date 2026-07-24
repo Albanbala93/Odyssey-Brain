@@ -572,8 +572,7 @@ export const MISSIONS: Mission[] = [
     title: "Explain what's wrong to a pharmacist",
     titleFr: "Expliquer ton problème à un pharmacien",
     description: "You're not feeling well and need advice at a pharmacy counter.",
-    descriptionFr:
-      "Tu ne te sens pas bien et as besoin de conseils au comptoir d'une pharmacie.",
+    descriptionFr: "Tu ne te sens pas bien et as besoin de conseils au comptoir d'une pharmacie.",
     targetSituation: "Pharmacy counter, explaining symptoms",
     targetCapabilitySlug: "describe_a_problem",
     contextType: "daily_life",
@@ -591,7 +590,8 @@ export const MISSIONS: Mission[] = [
       },
       {
         english: "Okay, I'd recommend this. Take it twice a day — does that work for you?",
-        french: "D'accord, je vous recommande ceci. Prenez-le deux fois par jour, ça vous convient ?",
+        french:
+          "D'accord, je vous recommande ceci. Prenez-le deux fois par jour, ça vous convient ?",
       },
     ],
     followUpIntents: [
@@ -622,7 +622,8 @@ export const MISSIONS: Mission[] = [
     difficulty: 1,
     openingPrompt: {
       english: "Hi, welcome! Are you ready to order, or do you need a few more minutes?",
-      french: "Bonjour, bienvenue ! Vous êtes prêt à commander, ou vous avez besoin de plus de temps ?",
+      french:
+        "Bonjour, bienvenue ! Vous êtes prêt à commander, ou vous avez besoin de plus de temps ?",
       successKeywords: ["i'll have", "i'd like", "can i get", "could i get"],
     },
     scriptedTurns: [
@@ -645,7 +646,8 @@ export const MISSIONS: Mission[] = [
     exampleDebrief: {
       strength: "Tu as signalé l'erreur sans être brusque.",
       improvement: "Rappelle ce que tu avais commandé exactement, pas juste que c'est faux.",
-      improvedExample: "Sorry, I think there's a mix-up — I actually ordered the salmon, not the chicken salad.",
+      improvedExample:
+        "Sorry, I think there's a mix-up — I actually ordered the salmon, not the chicken salad.",
     },
     active: true,
   },
@@ -663,8 +665,10 @@ export const MISSIONS: Mission[] = [
     estimatedMinutes: 6,
     difficulty: 2,
     openingPrompt: {
-      english: "Hey, sorry to call — I got your email but I'm not totally sure what you need from me?",
-      french: "Hey, désolé de t'appeler — j'ai reçu ton e-mail mais je ne suis pas sûr de ce que tu attends de moi ?",
+      english:
+        "Hey, sorry to call — I got your email but I'm not totally sure what you need from me?",
+      french:
+        "Hey, désolé de t'appeler — j'ai reçu ton e-mail mais je ne suis pas sûr de ce que tu attends de moi ?",
       successKeywords: ["what i meant", "sorry", "let me explain", "basically"],
     },
     scriptedTurns: [
@@ -686,7 +690,8 @@ export const MISSIONS: Mission[] = [
     exampleDebrief: {
       strength: "Tu as reformulé ta demande de façon plus claire qu'à l'écrit.",
       improvement: "Donne un délai concret dès le début, ça évite un aller-retour de plus.",
-      improvedExample: "Sorry, let me explain — I basically need the updated numbers by Thursday morning.",
+      improvedExample:
+        "Sorry, let me explain — I basically need the updated numbers by Thursday morning.",
     },
     active: true,
   },
@@ -696,8 +701,7 @@ export const MISSIONS: Mission[] = [
     title: "Share your opinion during a group project discussion",
     titleFr: "Donner ton avis pendant un travail de groupe",
     description: "Your study group is deciding how to split up a project. Share your view.",
-    descriptionFr:
-      "Ton groupe d'étude décide comment répartir un projet. Donne ton point de vue.",
+    descriptionFr: "Ton groupe d'étude décide comment répartir un projet. Donne ton point de vue.",
     targetSituation: "Study group deciding how to split project work",
     targetCapabilitySlug: "participate_in_group_work",
     contextType: "studies",
@@ -727,7 +731,8 @@ export const MISSIONS: Mission[] = [
     exampleDebrief: {
       strength: "Tu as proposé une répartition concrète, pas juste une idée vague.",
       improvement: "Précise quelle partie tu prends toi-même, ça avance la discussion plus vite.",
-      improvedExample: "I'd suggest splitting it by topic — I could take the research part if that works.",
+      improvedExample:
+        "I'd suggest splitting it by topic — I could take the research part if that works.",
     },
     active: true,
   },
@@ -746,7 +751,8 @@ export const MISSIONS: Mission[] = [
     difficulty: 3,
     openingPrompt: {
       english: "Great presentation. Can you tell us more about how you chose your method?",
-      french: "Très belle présentation. Tu peux nous en dire plus sur comment tu as choisi ta méthode ?",
+      french:
+        "Très belle présentation. Tu peux nous en dire plus sur comment tu as choisi ta méthode ?",
       successKeywords: ["i chose", "because", "the reason", "i decided"],
     },
     scriptedTurns: [
@@ -768,7 +774,8 @@ export const MISSIONS: Mission[] = [
     exampleDebrief: {
       strength: "Tu as justifié ton choix au lieu de juste le décrire.",
       improvement: "Mentionne une limite ou une alternative, ça montre une réflexion plus poussée.",
-      improvedExample: "I chose this method because it was simpler to test — though a larger sample would've been more reliable.",
+      improvedExample:
+        "I chose this method because it was simpler to test — though a larger sample would've been more reliable.",
     },
     active: true,
   },
@@ -777,7 +784,8 @@ export const MISSIONS: Mission[] = [
     slug: "ask-for-directions",
     title: "Ask for directions and understand them in a new city",
     titleFr: "Demander son chemin dans une ville inconnue",
-    description: "You're lost in a new city. Ask a stranger for directions and confirm you understood.",
+    description:
+      "You're lost in a new city. Ask a stranger for directions and confirm you understood.",
     descriptionFr:
       "Tu es perdu dans une ville inconnue. Demande ton chemin à un inconnu et confirme avoir compris.",
     targetSituation: "Lost in an unfamiliar city, asking a stranger for help",
@@ -794,7 +802,8 @@ export const MISSIONS: Mission[] = [
       {
         english:
           "Sure — go straight for two blocks, then turn left at the pharmacy. It's right there.",
-        french: "Bien sûr — allez tout droit pendant deux rues, puis tournez à gauche à la pharmacie. C'est juste là.",
+        french:
+          "Bien sûr — allez tout droit pendant deux rues, puis tournez à gauche à la pharmacie. C'est juste là.",
       },
       {
         english: "No problem! Have a good day.",
