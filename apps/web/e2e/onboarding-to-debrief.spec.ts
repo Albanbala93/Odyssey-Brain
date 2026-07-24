@@ -19,7 +19,7 @@ test("guest can complete welcome → onboarding → mission → debrief → Toda
   await page.getByRole("button", { name: /Personal/ }).click();
 
   await expect(page.getByText("When do you usually need English?")).toBeVisible();
-  await page.getByRole("button", { name: /^Meetings/ }).click();
+  await page.getByRole("button", { name: /^Everyday life/ }).click();
 
   await page.getByRole("button", { name: "Commencer ma première mission" }).click();
 

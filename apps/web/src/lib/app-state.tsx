@@ -191,7 +191,17 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [state, isReady, repository]);
 
   const completeOnboarding = useCallback((answers: OnboardingAnswers) => {
-    setState((prev) => ({ ...prev, user: applyOnboardingAnswers(prev.user, answers) }));
+    // onboarding/page.tsx calls startMission() immediately after this, in
+    // the same synchronous stretch of code — before the `stateRef` mirror
+    // effect above has a chance to run on the next render. Without this,
+    // startMission read the pre-onboarding user (empty `contexts`), so the
+    // very first mission was picked with zero context relevance no matter
+    // what the learner selected in onboarding. Assigning stateRef.current
+    // here directly keeps the mirror's documented invariant ("read the
+    // latest state synchronously") true for this specific call chain.
+    const updatedUser = applyOnboardingAnswers(stateRef.current.user, answers);
+    stateRef.current = { ...stateRef.current, user: updatedUser };
+    setState((prev) => ({ ...prev, user: updatedUser }));
   }, []);
 
   const updatePreferences = useCallback((partial: Partial<UserModel["preferences"]>) => {

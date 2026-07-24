@@ -4,7 +4,8 @@ import { AppShell, Splash } from "@/components/AppShell";
 import { Button } from "@/components/ui/Button";
 import { TranslationLayer } from "@/components/coach/TranslationLayer";
 import { VoiceRecorder } from "@/components/coach/VoiceRecorder";
-import type { GoalCategory } from "@/domain/types";
+import type { OnboardingSituation } from "@/domain/user-model";
+import type { ContextType, GoalCategory } from "@/domain/types";
 import { useAppState } from "@/lib/app-state";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -16,15 +17,46 @@ const GOAL_OPTIONS: { value: GoalCategory; en: string; fr: string; emoji: string
   { value: "personal", en: "Personal", fr: "Personnel", emoji: "❤️" },
 ];
 
-const SITUATION_OPTIONS = [
-  { en: "Meetings", fr: "Réunions" },
-  { en: "Clients", fr: "Clients" },
-  { en: "Emails", fr: "E-mails" },
-  { en: "Presentations", fr: "Présentations" },
-  { en: "Interviews", fr: "Entretiens" },
-  { en: "Networking", fr: "Réseautage" },
-  { en: "Other", fr: "Autre" },
-];
+/**
+ * The situations offered on Screen 5 depend on why the learner is here
+ * (Screen 3) — a "Personal" or "Travel" learner asking for "Meetings" and
+ * "Clients" made every non-work learner get professional missions
+ * regardless of what they picked (root cause of the "rubriques ne
+ * correspondent pas" bug report). Each option's `type` is the real
+ * ContextType the decision engine matches missions against.
+ */
+const SITUATION_OPTIONS: Record<
+  GoalCategory,
+  { type: ContextType; en: string; fr: string }[]
+> = {
+  work: [
+    { type: "meetings", en: "Meetings", fr: "Réunions" },
+    { type: "clients", en: "Clients", fr: "Clients" },
+    { type: "emails", en: "Emails", fr: "E-mails" },
+    { type: "presentations", en: "Presentations", fr: "Présentations" },
+    { type: "interviews", en: "Interviews", fr: "Entretiens" },
+    { type: "networking", en: "Networking", fr: "Réseautage" },
+    { type: "other", en: "Other", fr: "Autre" },
+  ],
+  travel: [
+    { type: "travel", en: "Bookings & transport", fr: "Réservations & transports" },
+    { type: "daily_life", en: "Restaurants & shops", fr: "Restaurants & commerces" },
+    { type: "networking", en: "Meeting people", fr: "Rencontres" },
+    { type: "other", en: "Other", fr: "Autre" },
+  ],
+  studies: [
+    { type: "studies", en: "Classes & presentations", fr: "Cours & présentations" },
+    { type: "interviews", en: "Applications & interviews", fr: "Candidatures & entretiens" },
+    { type: "daily_life", en: "Everyday student life", fr: "Vie quotidienne étudiante" },
+    { type: "other", en: "Other", fr: "Autre" },
+  ],
+  personal: [
+    { type: "daily_life", en: "Everyday life", fr: "Vie quotidienne" },
+    { type: "travel", en: "Travel", fr: "Voyages" },
+    { type: "networking", en: "Meeting people", fr: "Rencontres & amis" },
+    { type: "other", en: "Other", fr: "Autre" },
+  ],
+};
 
 function CoachBubble({ english, french }: { english: string; french: string }) {
   return (
@@ -41,23 +73,29 @@ export default function OnboardingPage() {
   const [name, setName] = useState("");
   const [goalCategory, setGoalCategory] = useState<GoalCategory | null>(null);
   const [professionalContext, setProfessionalContext] = useState("");
-  const [situations, setSituations] = useState<string[]>([]);
+  const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
   const [isStarting, setIsStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!isReady) return <Splash />;
 
+  const situationOptions = SITUATION_OPTIONS[goalCategory ?? "personal"];
+
   function toggleSituation(label: string) {
-    setSituations((prev) =>
+    setSelectedLabels((prev) =>
       prev.includes(label) ? prev.filter((s) => s !== label) : [...prev, label],
     );
   }
 
   async function finish() {
-    if (situations.length === 0 || isStarting) return;
+    if (selectedLabels.length === 0 || isStarting) return;
     setIsStarting(true);
     setError(null);
     try {
+      const situations: OnboardingSituation[] = selectedLabels
+        .map((label) => situationOptions.find((option) => option.en === label))
+        .filter((option): option is (typeof situationOptions)[number] => Boolean(option))
+        .map((option) => ({ type: option.type, label: option.en }));
       completeOnboarding({
         name: name.trim(),
         goalCategory: goalCategory ?? "personal",
@@ -116,6 +154,7 @@ export default function OnboardingPage() {
                   type="button"
                   onClick={() => {
                     setGoalCategory(option.value);
+                    setSelectedLabels([]);
                     setStep(option.value === "work" ? 2 : 3);
                   }}
                   className="border-border bg-surface hover:bg-accent-soft rounded-2xl border p-4 text-left transition-colors"
@@ -155,8 +194,8 @@ export default function OnboardingPage() {
               french="Dans quelles situations as-tu généralement besoin de l'anglais ?"
             />
             <div className="grid grid-cols-2 gap-3">
-              {SITUATION_OPTIONS.map((option) => {
-                const active = situations.includes(option.en);
+              {situationOptions.map((option) => {
+                const active = selectedLabels.includes(option.en);
                 return (
                   <button
                     key={option.en}
@@ -175,7 +214,7 @@ export default function OnboardingPage() {
             </div>
             {error && <p className="text-danger text-sm">{error}</p>}
             <Button
-              disabled={situations.length === 0 || isStarting}
+              disabled={selectedLabels.length === 0 || isStarting}
               onClick={finish}
               className="mt-auto"
             >
