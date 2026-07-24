@@ -39,6 +39,7 @@ export function createGuestUserModel(now: Date = new Date()): UserModel {
       autoSpeak: true,
       slowSpeech: false,
       preferredSessionMinutes: 8,
+      difficultyLevel: "adaptive",
     },
     recurringErrors: [],
     memories: [],

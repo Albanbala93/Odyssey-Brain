@@ -47,6 +47,7 @@ interface UserPreferencesRow {
   auto_speak: boolean;
   slow_speech: boolean;
   preferred_session_minutes: number;
+  difficulty_level: string;
   notification_settings: unknown;
   consent: unknown;
 }

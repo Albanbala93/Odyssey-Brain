@@ -79,6 +79,26 @@ describe("recommendMission", () => {
     expect(recommendMission(studiesUser, MISSIONS).mission.contextType).toBe("studies");
   });
 
+  it("prefers the easiest missions when the learner explicitly chose 'easy', overriding confidence", () => {
+    const user = createGuestUserModel();
+    user.confidence.global = 0.9; // would otherwise favor harder missions
+    user.preferences.difficultyLevel = "easy";
+
+    const { mission } = recommendMission(user, MISSIONS);
+
+    expect(mission.difficulty).toBeLessThanOrEqual(2);
+  });
+
+  it("prefers the hardest missions when the learner explicitly chose 'hard', overriding low confidence", () => {
+    const user = createGuestUserModel();
+    user.confidence.global = 0.1; // would otherwise force the easiest missions
+    user.preferences.difficultyLevel = "hard";
+
+    const { mission } = recommendMission(user, MISSIONS);
+
+    expect(mission.difficulty).toBeGreaterThanOrEqual(4);
+  });
+
   it("two users with different histories receive different recommendations", () => {
     const thriving = createGuestUserModel();
     const struggling = createGuestUserModel();
@@ -224,6 +244,20 @@ describe("decideDifficulty", () => {
     capability.attemptCount = 3;
     capability.demonstratedScore = 80;
     expect(decideDifficulty(user, "present_idea")).toBe(4);
+  });
+
+  it("an explicit level choice overrides the confidence heuristic entirely", () => {
+    const user = createGuestUserModel();
+    user.confidence.global = 0.9;
+    const capability = user.capabilities.find((c) => c.capabilityId === "cap-present-idea")!;
+    capability.attemptCount = 3;
+    capability.demonstratedScore = 80;
+
+    user.preferences.difficultyLevel = "easy";
+    expect(decideDifficulty(user, "present_idea")).toBe(1);
+
+    user.preferences.difficultyLevel = "hard";
+    expect(decideDifficulty(user, "present_idea")).toBe(5);
   });
 });
 
