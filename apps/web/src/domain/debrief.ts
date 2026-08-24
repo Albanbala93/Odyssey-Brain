@@ -1,6 +1,12 @@
 import { countWords } from "@/lib/text";
 import { computeScoreDelta } from "./capability";
-import type { ConversationTurn, Mission, RecurringError, SessionDebrief } from "./types";
+import type {
+  ConversationTurn,
+  Mission,
+  RecurringError,
+  SessionDebrief,
+  TurnCorrection,
+} from "./types";
 
 const ACTIVE_PATTERN_MIN_COUNT = 2;
 
@@ -50,7 +56,7 @@ export function computeSessionDebrief(params: {
   // generic canned example — the whole point is that feedback should
   // reflect what the learner actually said, not a fixed script that never
   // changes no matter what happened in the conversation.
-  const sessionCorrections = turns
+  const sessionCorrections: TurnCorrection[] = turns
     .filter((t) => t.role === "coach" && t.correction)
     .map((t) => t.correction!);
   const lastCorrection = sessionCorrections[sessionCorrections.length - 1];
@@ -86,6 +92,10 @@ export function computeSessionDebrief(params: {
     improvedExample,
     correctionSource,
     originalText: lastCorrection?.original,
+    // The full recap ("rappel grammatical/conjugaison"), not just the
+    // single last correction — a session with several distinct mistakes
+    // corrected should surface every one of them, not just the most recent.
+    sessionCorrections,
     practiceRecommendation,
     learnerWordCount,
     scoreDelta: computeScoreDelta({ turnsCompleted, usedSuccessKeyword }),

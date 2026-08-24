@@ -82,6 +82,43 @@ describe("computeSessionDebrief", () => {
     expect(debrief.improvedExample).toBe(mission.exampleDebrief.improvedExample);
     expect(debrief.originalText).toBeUndefined();
     expect(debrief.practiceRecommendation).toBeNull();
+    expect(debrief.sessionCorrections).toEqual([]);
+  });
+
+  it("collects every correction made during the session, not just the last one", () => {
+    const debrief = computeSessionDebrief({
+      mission,
+      userTurns: ["We propose this idea", "It reduce cost"],
+      turns: [
+        coachTurn({
+          id: "turn-1",
+          correction: {
+            original: "I go to meeting yesterday",
+            improved: "I went to the meeting yesterday",
+            explanationFr: "Utilise le passé simple pour une action terminée.",
+            category: "verb_tense",
+          },
+        }),
+        coachTurn({
+          id: "turn-2",
+          correction: {
+            original: "It reduce cost",
+            improved: "It reduces cost",
+            explanationFr: "Le sujet à la 3e personne du singulier prend un -s.",
+            category: "subject_verb_agreement",
+          },
+        }),
+      ],
+      recommendedNextMissionId: null,
+    });
+    expect(debrief.sessionCorrections).toHaveLength(2);
+    expect(debrief.sessionCorrections.map((c) => c.category)).toEqual([
+      "verb_tense",
+      "subject_verb_agreement",
+    ]);
+    // priorityImprovement/improvedExample still reflect the most recent
+    // correction — the recap list is the addition, not a replacement.
+    expect(debrief.improvedExample).toBe("It reduces cost");
   });
 
   it("uses the session's real correction instead of the mission's generic example when one happened", () => {

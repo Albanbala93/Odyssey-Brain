@@ -66,6 +66,20 @@ describe("COACH_SYSTEM_PROMPT.build", () => {
     expect(prompt).toContain("past tense of irregular verbs");
   });
 
+  it("tells the coach its target exchange count and current position", () => {
+    const user = createGuestUserModel();
+    const prompt = COACH_SYSTEM_PROMPT.build({
+      user,
+      mission,
+      turnIndex: 1,
+      history: [],
+      correctionPolicy,
+    });
+    expect(prompt).toContain(`about ${mission.scriptedTurns.length + 1} exchanges`);
+    expect(prompt).toContain("exchange 2");
+    expect(prompt).toContain('"wrap_up"');
+  });
+
   it("ignores a resolved recurring error even with a high count", () => {
     const user = createGuestUserModel();
     user.recurringErrors = [

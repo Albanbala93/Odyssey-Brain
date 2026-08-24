@@ -98,6 +98,7 @@ describe("mapRowsToOdysseyState", () => {
               french_text: null,
               transcription_confidence: null,
               correction: null,
+              intent: null,
               created_at: "2026-01-01T00:01:00.000Z",
             },
             {
@@ -109,6 +110,7 @@ describe("mapRowsToOdysseyState", () => {
               french_text: null,
               transcription_confidence: null,
               correction: null,
+              intent: null,
               created_at: "2026-01-01T00:00:00.000Z",
             },
           ],
@@ -183,6 +185,7 @@ describe("state -> row mappers", () => {
             priorityImprovement: "Add detail",
             improvedExample: "Example",
             correctionSource: "generic",
+            sessionCorrections: [],
             practiceRecommendation: null,
             learnerWordCount: 5,
             scoreDelta: 5,
