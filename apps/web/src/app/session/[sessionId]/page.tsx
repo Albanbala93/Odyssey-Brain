@@ -64,6 +64,12 @@ export default function SessionPage() {
 
   const totalExpectedTurns = mission.scriptedTurns.length + 1;
   const coachTurnsSoFar = session.turns.filter((t) => t.role === "coach").length;
+  // The coach's own "wrap_up" signal (coach-system-prompt.ts, local-coach-provider.ts)
+  // is the real criterion for when a lesson is done — surfacing it here means the
+  // learner sees a clear ending instead of having to notice the conversation
+  // stalled and think to click "Terminer" themselves.
+  const lastCoachTurn = [...session.turns].reverse().find((t) => t.role === "coach");
+  const isWrappedUp = lastCoachTurn?.intent === "wrap_up";
 
   async function handleSend(text: string, transcriptionConfidence?: number) {
     if (!text.trim() || isSending || session!.status !== "in_progress") return;
@@ -96,7 +102,10 @@ export default function SessionPage() {
           ←
         </button>
         <p className="text-muted text-xs font-semibold">
-          {mission.titleFr} • {Math.min(coachTurnsSoFar, totalExpectedTurns)}/{totalExpectedTurns}
+          {mission.titleFr} •{" "}
+          {isWrappedUp
+            ? "Terminée"
+            : `${Math.min(coachTurnsSoFar, totalExpectedTurns)}/${totalExpectedTurns}`}
         </p>
         <span className="w-8" />
       </div>
@@ -130,7 +139,26 @@ export default function SessionPage() {
       )}
 
       <div className="border-border flex flex-col gap-3 border-t px-4 py-4">
-        {session.status === "in_progress" ? (
+        {session.status === "in_progress" && isWrappedUp ? (
+          <>
+            <p className="text-muted text-center text-sm">
+              Le coach a naturellement clos la conversation — ta leçon est terminée.
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  speakEnglish(session.turns[session.turns.length - 1]?.englishText ?? "")
+                }
+              >
+                🔊 Réécouter
+              </Button>
+              <Button onClick={handleFinish} className="flex-1">
+                Voir mon débrief
+              </Button>
+            </div>
+          </>
+        ) : session.status === "in_progress" ? (
           <>
             <VoiceRecorder onResult={handleSend} disabled={isSending} />
             <div className="flex gap-2">

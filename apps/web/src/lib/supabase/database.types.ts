@@ -93,6 +93,7 @@ interface ConversationTurnsRow {
   french_text: string | null;
   transcription_confidence: number | null;
   correction: unknown;
+  intent: string | null;
   created_at: string;
 }
 

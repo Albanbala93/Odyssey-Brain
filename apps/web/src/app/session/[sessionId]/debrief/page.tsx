@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { getMissionById } from "@/domain/missions";
 import { useAppState } from "@/lib/app-state";
+import { correctionCategoryLabelFr } from "@/lib/correction-labels";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
@@ -75,22 +76,28 @@ export default function DebriefPage() {
             {strength}
           </FeedbackCard>
         ))}
-        <FeedbackCard
-          eyebrow={
-            debrief.correctionSource === "session"
-              ? "D'après cette session"
-              : "Prochaine amélioration"
-          }
-        >
-          {debrief.correctionSource === "session" && debrief.originalText ? (
-            <>
-              Tu as dit : « {debrief.originalText} ». {debrief.priorityImprovement}
-            </>
-          ) : (
-            debrief.priorityImprovement
-          )}
-        </FeedbackCard>
-        <FeedbackCard eyebrow="Exemple amélioré">“{debrief.improvedExample}”</FeedbackCard>
+        {debrief.sessionCorrections.length > 0 ? (
+          <div>
+            <p className="text-muted mb-2 text-xs font-semibold tracking-wide uppercase">
+              Points à retravailler ({debrief.sessionCorrections.length})
+            </p>
+            <div className="flex flex-col gap-2">
+              {debrief.sessionCorrections.map((correction, i) => (
+                <FeedbackCard key={i} eyebrow={correctionCategoryLabelFr(correction.category)}>
+                  Tu as dit : « {correction.original} » → « {correction.improved} ».{" "}
+                  {correction.explanationFr}
+                </FeedbackCard>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <>
+            <FeedbackCard eyebrow="Prochaine amélioration">
+              {debrief.priorityImprovement}
+            </FeedbackCard>
+            <FeedbackCard eyebrow="Exemple amélioré">“{debrief.improvedExample}”</FeedbackCard>
+          </>
+        )}
         {debrief.practiceRecommendation && (
           <FeedbackCard eyebrow="Exercice recommandé" tone="warning">
             {debrief.practiceRecommendation.reason}

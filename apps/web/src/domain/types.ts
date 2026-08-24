@@ -213,6 +213,8 @@ export interface ConversationTurn {
   comprehensionRisk?: number;
   /** For coach turns: which provider produced this reply, so the UI can label offline/fallback responses (ODYSSEY_MASTER_PROMPT_CODEX.md §21). */
   source?: "openai" | "local_fallback";
+  /** For coach turns: the coach's own signal for what kind of turn this is — in particular "wrap_up", which marks a lesson as naturally finished (ai/schemas.ts CoachTurn.intent). Previously computed by every provider but discarded before it ever reached the UI. */
+  intent?: "prompt" | "follow_up" | "challenge" | "support" | "wrap_up";
   /** For coach turns: present only when the coach corrected this specific turn. */
   correction?: TurnCorrection;
   createdAt: string;
@@ -228,6 +230,8 @@ export interface SessionDebrief {
   correctionSource: "session" | "generic";
   /** The learner's actual phrase that was corrected, only set when correctionSource is "session". */
   originalText?: string;
+  /** Every real correction made during this session, in the order they happened — the "rappel grammatical/conjugaison" recap. Empty when the session had none. */
+  sessionCorrections: TurnCorrection[];
   /** A targeted replay suggestion, only set when the correction category is a genuine recurring pattern (count >= 2 in user.recurringErrors) — never fabricated from a single mistake. */
   practiceRecommendation: { missionId: string; reason: string } | null;
   learnerWordCount: number;
