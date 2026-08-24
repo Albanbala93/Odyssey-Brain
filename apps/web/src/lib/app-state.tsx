@@ -278,6 +278,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       frenchText: openingTurn.french,
       comprehensionRisk: openingTurn.detectedSignals?.comprehensionRisk,
       source,
+      intent: openingTurn.intent,
       createdAt: now.toISOString(),
     };
 
@@ -369,6 +370,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         // the debrief can show what was actually corrected in this session
         // instead of always falling back to the mission's generic example.
         correction: nextTurn.correction,
+        // Persisted so session/[sessionId]/page.tsx can react to a
+        // "wrap_up" turn and make the end of the lesson visible instead of
+        // silently discarding the signal, as before.
+        intent: nextTurn.intent,
         createdAt: new Date().toISOString(),
       };
 

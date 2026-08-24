@@ -169,6 +169,7 @@ export function mapRowsToOdysseyState(rows: OdysseyStateRows): OdysseyState {
         frenchText: t.french_text ?? undefined,
         transcriptionConfidence: t.transcription_confidence ?? undefined,
         correction: (t.correction as ConversationTurn["correction"]) ?? undefined,
+        intent: (t.intent as ConversationTurn["intent"]) ?? undefined,
         createdAt: t.created_at,
       })),
     learnerWordCount: s.learner_word_count,
@@ -303,6 +304,7 @@ export function mapSessionToTurnUpserts(
     french_text: t.frenchText ?? null,
     transcription_confidence: t.transcriptionConfidence ?? null,
     correction: t.correction ?? null,
+    intent: t.intent ?? null,
     created_at: t.createdAt,
   }));
 }
